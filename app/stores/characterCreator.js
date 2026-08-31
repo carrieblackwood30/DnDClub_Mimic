@@ -65,6 +65,35 @@ export const useCharacterCreatorStore = defineStore('characterCreator', () => {
     selectedSkills.value.push(skillId)
   }
 
+  const createCharacter = () => {
+    return {
+      name: name.value,
+      level: level.value,
+
+      raceId: raceId.value,
+      subraceId: subraceId.value,
+
+      classId: classId.value,
+      subclassId: subclassId.value,
+
+      armorId: armorId.value,
+      shieldId: shieldId.value,
+
+      weaponId: weaponId.value,
+      weaponAbility: weaponAbility.value,
+
+      backgroundId: backgroundId.value,
+
+      abilityScores: {
+        ...abilityScores
+      },
+
+      selectedSkills: [
+        ...selectedSkills.value
+      ]
+    }
+  }
+
   return {
     name,
     level,
@@ -91,6 +120,8 @@ export const useCharacterCreatorStore = defineStore('characterCreator', () => {
     selectedSkills,
     toggleSkill,
     weaponAbility,
-    setWeaponAbility
+    setWeaponAbility,
+    
+    createCharacter
   }
 })

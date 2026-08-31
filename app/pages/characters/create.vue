@@ -1,5 +1,16 @@
 <script setup>
 const characterCreator = useCharacterCreatorStore()
+const charactersStore = useCharactersStore()
+
+const createCharacter = () => {
+  const character = characterCreator.createCharacter()
+
+  character.id = crypto.randomUUID()
+
+  charactersStore.addCharacter(character)
+
+  console.log('Создан персонаж:', character)
+}
 </script>
 
 <template>
@@ -105,8 +116,22 @@ const characterCreator = useCharacterCreatorStore()
     </div>
     
     <div class="mt-10">
-    <CharacterSpellcasting />
-  </div>
+      <CharacterSpellcasting />
+    </div>
+
+    <div class="mt-8">
+      <CharacterSummary />
+    </div>
+
+    <div class="mt-10">
+      <button
+        type="button"
+        class="border rounded-lg px-4 py-2 font-semibold"
+        @click="createCharacter"
+      >
+        Создать персонажа
+      </button>
+    </div>
   </div>
   
 </template>
