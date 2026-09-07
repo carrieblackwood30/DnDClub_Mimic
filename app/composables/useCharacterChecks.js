@@ -1,27 +1,22 @@
-import { computed } from 'vue'
+import { useCharacterStats } from '~/composables/useCharacterStats'
+import { useCharacterClass } from '~/composables/useCharacterClass'
+import { useCharacterProficiency } from '~/composables/useCharacterProficiency'
+import { useCharacterEffects } from '~/composables/useCharacterEffects'
+import { useDice } from '~/composables/useDice'
 
 export const useCharacterChecks = () => {
-  const {
-    abilityModifiers
-  } = useCharacterStats()
+  const { abilityModifiers } = useCharacterStats()
 
-  const {
-    savingThrowProficiencies
-  } = useCharacterClass()
+  const { savingThrowProficiencies } = useCharacterClass()
 
-  const {
-    proficiencyBonus
-  } = useCharacterProficiency()
+  const { proficiencyBonus } = useCharacterProficiency()
 
   const {
     strengthDisadvantage,
     dexterityDisadvantage
   } = useCharacterEffects()
 
-  const {
-    hasSavingThrowProficiency,
-    getProficiencyBonus
-  } = useCharacterProficiency()
+  const { rollCheck } = useDice()
 
   const getAbilityCheckModifier = (ability) => {
     return abilityModifiers.value[ability] ?? 0
@@ -34,9 +29,8 @@ export const useCharacterChecks = () => {
     const isProficient =
       savingThrowProficiencies.value.includes(ability)
 
-    return isProficient
-      ? baseModifier + proficiencyBonus.value
-      : baseModifier
+    return baseModifier +
+      (isProficient ? proficiencyBonus.value : 0)
   }
 
   const hasAbilityCheckDisadvantage = (ability) => {
@@ -63,11 +57,36 @@ export const useCharacterChecks = () => {
     return false
   }
 
+  const rollAbilityCheck = (ability) => {
+    const modifier = getAbilityCheckModifier(ability)
+
+    const hasDisadvantage =
+      hasAbilityCheckDisadvantage(ability)
+
+    return rollCheck(
+      modifier,
+      hasDisadvantage ? 'disadvantage' : 'normal'
+    )
+  }
+
+  const rollSavingThrow = (ability) => {
+    const modifier = getSavingThrowModifier(ability)
+
+    const hasDisadvantage =
+      hasSavingThrowDisadvantage(ability)
+
+    return rollCheck(
+      modifier,
+      hasDisadvantage ? 'disadvantage' : 'normal'
+    )
+  }
+
   return {
     getAbilityCheckModifier,
     getSavingThrowModifier,
-
     hasAbilityCheckDisadvantage,
-    hasSavingThrowDisadvantage
+    hasSavingThrowDisadvantage,
+    rollAbilityCheck,
+    rollSavingThrow
   }
 }

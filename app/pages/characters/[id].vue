@@ -1,7 +1,32 @@
 <script setup>
-import { onMounted, computed } from 'vue'
+import {
+  onMounted,
+  computed
+} from 'vue'
+
+import SavedCharacterOverview
+  from '~/components/character/saved/SavedCharacterOverview.vue'
+
+import SavedCharacterAbilityChecks
+  from '~/components/character/saved/SavedCharacterAbilityChecks.vue'
+
+import SavedCharacterSavingThrows
+  from '~/components/character/saved/SavedCharacterSavingThrows.vue'
+
+import SavedCharacterIdentity
+  from '~/components/character/saved/SavedCharacterIdentity.vue'
+
+import SavedCharacterEquipment
+  from '~/components/character/saved/SavedCharacterEquipment.vue'
+
+import SavedCharacterAttacks
+  from '~/components/character/saved/SavedCharacterAttacks.vue'
+
+import SavedCharacterSkills
+  from '~/components/character/saved/SavedCharacterSkills.vue'
 
 const route = useRoute()
+
 const charactersStore = useCharactersStore()
 
 onMounted(() => {
@@ -9,12 +34,74 @@ onMounted(() => {
 })
 
 const character = computed(() => {
-  return charactersStore.getCharacterById(route.params.id)
+  return charactersStore.getCharacterById(
+    route.params.id
+  )
 })
+
+/*
+|--------------------------------------------------------------------------
+| Данные персонажа
+|--------------------------------------------------------------------------
+*/
+
+const {
+  race,
+  subrace,
+  characterClass,
+  subclass,
+  armor,
+  shield,
+  weapon,
+  selectedSkills
+} = useSavedCharacterData(character)
+
+/*
+|--------------------------------------------------------------------------
+| HP
+|--------------------------------------------------------------------------
+*/
+
+const {
+  maxHitPoints
+} = useSavedCharacterHP(
+  character,
+  characterClass
+)
+
+/*
+|--------------------------------------------------------------------------
+| AC
+|--------------------------------------------------------------------------
+*/
+
+const {
+  armorClass
+} = useSavedCharacterAC(
+  character,
+  armor,
+  shield
+)
+
+/*
+|--------------------------------------------------------------------------
+| Основные характеристики
+|--------------------------------------------------------------------------
+*/
+
+const {
+  abilityModifiers,
+  proficiencyBonus
+} = useSavedCharacterStats(character)
 </script>
 
 <template>
   <div class="max-w-4xl mx-auto p-8">
+
+    <!-- ========================================================= -->
+    <!-- ПЕРСОНАЖ НЕ НАЙДЕН -->
+    <!-- ========================================================= -->
+
     <div
       v-if="!character"
       class="text-gray-500"
@@ -22,7 +109,16 @@ const character = computed(() => {
       Персонаж не найден.
     </div>
 
+    <!-- ========================================================= -->
+    <!-- ПЕРСОНАЖ -->
+    <!-- ========================================================= -->
+
     <div v-else>
+
+      <!-- ======================================================= -->
+      <!-- ИМЯ И УРОВЕНЬ -->
+      <!-- ======================================================= -->
+
       <h1 class="text-3xl font-bold">
         {{ character.name || 'Без имени' }}
       </h1>
@@ -32,125 +128,79 @@ const character = computed(() => {
         {{ character.level }}
       </p>
 
-      <div class="mt-6 border rounded-lg p-4">
-        <h2 class="text-xl font-bold">
-          Основные характеристики
-        </h2>
+      <!-- ======================================================= -->
+      <!-- ОСНОВНЫЕ ХАРАКТЕРИСТИКИ -->
+      <!-- ======================================================= -->
 
-        <div class="mt-4 grid grid-cols-3 gap-4">
-          <div>
-            Сила:
-            <strong>
-              {{ character.abilityScores.strength }}
-            </strong>
-          </div>
+      <SavedCharacterOverview
+        :character="character"
+        :armor-class="armorClass"
+        :max-hit-points="maxHitPoints"
+        :ability-modifiers="abilityModifiers"
+        :proficiency-bonus="proficiencyBonus"
+      />
 
-          <div>
-            Ловкость:
-            <strong>
-              {{ character.abilityScores.dexterity }}
-            </strong>
-          </div>
+      <!-- ======================================================= -->
+      <!-- ПРОВЕРКИ ХАРАКТЕРИСТИК -->
+      <!-- ======================================================= -->
 
-          <div>
-            Телосложение:
-            <strong>
-              {{ character.abilityScores.constitution }}
-            </strong>
-          </div>
+      <SavedCharacterAbilityChecks
+        :character="character"
+        :character-class="characterClass"
+      />
 
-          <div>
-            Интеллект:
-            <strong>
-              {{ character.abilityScores.intelligence }}
-            </strong>
-          </div>
+      <!-- ======================================================= -->
+      <!-- СПАСБРОСКИ -->
+      <!-- ======================================================= -->
 
-          <div>
-            Мудрость:
-            <strong>
-              {{ character.abilityScores.wisdom }}
-            </strong>
-          </div>
+      <SavedCharacterSavingThrows
+        :character="character"
+        :character-class="characterClass"
+      />
 
-          <div>
-            Харизма:
-            <strong>
-              {{ character.abilityScores.charisma }}
-            </strong>
-          </div>
-        </div>
-      </div>
+      <!-- ======================================================= -->
+      <!-- ВЫБОР ПЕРСОНАЖА -->
+      <!-- ======================================================= -->
 
-      <div class="mt-6 border rounded-lg p-4">
-        <h2 class="text-xl font-bold">
-          Выбор персонажа
-        </h2>
+      <SavedCharacterIdentity
+        :race="race"
+        :subrace="subrace"
+        :character-class="characterClass"
+        :subclass="subclass"
+      />
 
-        <p class="mt-2">
-          Раса: {{ character.raceId }}
-        </p>
+      <!-- ======================================================= -->
+      <!-- ЭКИПИРОВКА -->
+      <!-- ======================================================= -->
 
-        <p>
-          Подраса: {{ character.subraceId }}
-        </p>
+      <SavedCharacterEquipment
+        :armor="armor"
+        :shield="shield"
+        :weapon="weapon"
+      />
 
-        <p>
-          Класс: {{ character.classId }}
-        </p>
+      <!-- ======================================================= -->
+      <!-- АТАКИ -->
+      <!-- ======================================================= -->
 
-        <p>
-          Подкласс:
-          {{ character.subclassId ?? 'Не выбран' }}
-        </p>
-      </div>
+      <SavedCharacterAttacks
+        :character="character"
+        :weapon="weapon"
+        :character-class="characterClass"
+      />
 
-      <div class="mt-6 border rounded-lg p-4">
-        <h2 class="text-xl font-bold">
-          Экипировка
-        </h2>
+      <!-- ======================================================= -->
+      <!-- НАВЫКИ -->
+      <!-- ======================================================= -->
 
-        <p class="mt-2">
-          Броня:
-          {{ character.armorId ?? 'Не выбрана' }}
-        </p>
+      <SavedCharacterSkills
+        :character="character"
+        :selected-skills="selectedSkills"
+      />
 
-        <p>
-          Щит:
-          {{ character.shieldId ?? 'Не используется' }}
-        </p>
-
-        <p>
-          Оружие:
-          {{ character.weaponId ?? 'Не выбрано' }}
-        </p>
-      </div>
-
-      <div class="mt-6 border rounded-lg p-4">
-        <h2 class="text-xl font-bold">
-          Навыки
-        </h2>
-
-        <div
-          v-if="character.selectedSkills.length === 0"
-          class="mt-2 text-gray-500"
-        >
-          Навыки не выбраны.
-        </div>
-
-        <div
-          v-else
-          class="mt-2"
-        >
-          <span
-            v-for="skill in character.selectedSkills"
-            :key="skill"
-            class="inline-block border rounded px-2 py-1 mr-2 mb-2"
-          >
-            {{ skill }}
-          </span>
-        </div>
-      </div>
+      <!-- ======================================================= -->
+      <!-- НАЗАД -->
+      <!-- ======================================================= -->
 
       <div class="mt-6">
         <NuxtLink
@@ -160,6 +210,7 @@ const character = computed(() => {
           ← Назад к персонажам
         </NuxtLink>
       </div>
+
     </div>
   </div>
 </template>
