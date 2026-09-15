@@ -104,6 +104,10 @@ const createCharacter = () => {
     </div>
 
     <div class="mt-10">
+      <CharacterSpells />
+    </div>
+
+    <div class="mt-10">
       <CharacterWeapon />
     </div>
 
@@ -117,6 +121,10 @@ const createCharacter = () => {
     
     <div class="mt-10">
       <CharacterSpellcasting />
+    </div>
+
+    <div class="mt-8">
+      <CharacterSummary />
     </div>
 
     <div class="mt-8">

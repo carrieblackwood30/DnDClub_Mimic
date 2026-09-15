@@ -102,9 +102,11 @@ export const classes = [
     },
 
     spellcasting: {
-      ability: 'charisma'
+      type: 'known',
+      ability: 'charisma',
+      slotProgression: 'full-caster',
+      startsAtLevel: 1
     },
-
     subclasses: [
       {
         id: 'college-of-lore',
@@ -153,7 +155,14 @@ export const classes = [
     },
 
     spellcasting: {
-      ability: 'wisdom'
+      type: 'prepared',
+      ability: 'wisdom',
+      slotProgression: 'full-caster',
+      startsAtLevel: 1,
+      preparation: {
+        formula: 'ability-modifier-plus-level',
+        minimum: 1
+      }
     },
 
     subclasses: [
@@ -216,7 +225,14 @@ export const classes = [
     },
 
     spellcasting: {
-      ability: 'wisdom'
+      type: 'prepared',
+      ability: 'wisdom',
+      slotProgression: 'full-caster',
+      startsAtLevel: 1,
+      preparation: {
+        formula: 'ability-modifier-plus-level',
+        minimum: 1
+      }
     },
 
     subclasses: [
@@ -372,7 +388,14 @@ export const classes = [
     },
 
     spellcasting: {
-      ability: 'charisma'
+      type: 'prepared',
+      ability: 'charisma',
+      slotProgression: 'half-caster',
+      startsAtLevel: 2,
+      preparation: {
+        formula: 'ability-modifier-plus-half-level',
+        minimum: 1
+      }
     },
 
     subclasses: [
@@ -427,7 +450,10 @@ export const classes = [
     },
 
     spellcasting: {
-      ability: 'wisdom'
+      type: 'known',
+      ability: 'wisdom',
+      slotProgression: 'half-caster',
+      startsAtLevel: 2
     },
 
     subclasses: [
@@ -538,7 +564,10 @@ export const classes = [
     },
 
     spellcasting: {
-      ability: 'charisma'
+      type: 'known',
+      ability: 'charisma',
+      slotProgression: 'full-caster',
+      startsAtLevel: 1
     },
 
     subclasses: [
@@ -590,7 +619,10 @@ export const classes = [
     },
 
     spellcasting: {
-      ability: 'charisma'
+      type: 'pact',
+      ability: 'charisma',
+      slotProgression: 'pact-magic',
+      startsAtLevel: 1
     },
 
     subclasses: [
@@ -643,7 +675,28 @@ export const classes = [
     },
 
     spellcasting: {
-      ability: 'intelligence'
+      type: 'prepared',
+      ability: 'intelligence',
+      spellList: 'wizard',
+      slotProgression: 'full-caster',
+      startsAtLevel: 1,
+      spellbook: {
+        enabled: true,
+        initialSpells: 6,
+        spellsPerLevel: 2
+      },
+      spellsKnown: null,
+      preparation: {
+        formula: 'ability-modifier-plus-level',
+        minimum: 1
+      },
+      cantripsKnown: {
+        progression: [
+          { level: 1, count: 3 },
+          { level: 4, count: 4 },
+          { level: 10, count: 5 }
+        ]
+      }
     },
 
     subclasses: [

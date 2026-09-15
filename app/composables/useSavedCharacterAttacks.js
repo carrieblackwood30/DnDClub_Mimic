@@ -6,7 +6,10 @@ export const useSavedCharacterAttacks = (
   weapon,
   characterClass
 ) => {
-  const { rollCheck } = useDice()
+  const {
+    rollCheck,
+    rollDamage
+  } = useDice()
 
   const {
     getAttackMode
@@ -43,9 +46,6 @@ export const useSavedCharacterAttacks = (
       )
     }
 
-    /*
-     * Владение оружием
-     */
     const weaponProficiencies =
       characterClass.value
         ?.proficiencies
@@ -59,17 +59,9 @@ export const useSavedCharacterAttacks = (
         weapon.value.id
       )
 
-    /*
-     * Характеристика атаки
-     */
     let ability =
       weapon.value.ability
 
-    /*
-     * Finesse:
-     * используем сохранённый выбор
-     * STR или DEX.
-     */
     if (
       weapon.value.properties?.includes(
         'finesse'
@@ -83,9 +75,6 @@ export const useSavedCharacterAttacks = (
     const abilityModifier =
       getModifier(ability)
 
-    /*
-     * Бонус атаки
-     */
     const attackModifier =
       abilityModifier +
       (
@@ -94,9 +83,6 @@ export const useSavedCharacterAttacks = (
           : 0
       )
 
-    /*
-     * Модификатор урона
-     */
     const damageModifier =
       abilityModifier
 
@@ -110,14 +96,6 @@ export const useSavedCharacterAttacks = (
     }
   })
 
-  /*
-   * Бросок атаки.
-   *
-   * mode:
-   * 'normal'
-   * 'advantage'
-   * 'disadvantage'
-   */
   const rollAttack = (
     mode = 'normal'
   ) => {
@@ -125,10 +103,6 @@ export const useSavedCharacterAttacks = (
       return null
     }
 
-    /*
-     * Проверяем, что передан
-     * допустимый режим.
-     */
     const requestedMode = [
       'normal',
       'advantage',
@@ -137,18 +111,10 @@ export const useSavedCharacterAttacks = (
       ? mode
       : 'normal'
 
-    /*
-     * Передаём Advantage / Disadvantage
-     * в систему эффектов.
-     *
-     * Там дополнительно учитывается
-     * помеха от экипировки.
-     */
     const finalMode =
       getAttackMode({
         advantage:
           requestedMode === 'advantage',
-
         disadvantage:
           requestedMode === 'disadvantage'
       })
@@ -159,8 +125,24 @@ export const useSavedCharacterAttacks = (
     )
   }
 
+  const rollAttackDamage = (
+    critical = false
+  ) => {
+    if (!attack.value) {
+      return null
+    }
+
+    return rollDamage(
+      attack.value.weapon.damage,
+      {
+        critical
+      }
+    )
+  }
+
   return {
     attack,
-    rollAttack
+    rollAttack,
+    rollAttackDamage
   }
 }

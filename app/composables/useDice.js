@@ -1,20 +1,10 @@
 export const useDice = () => {
-  /*
-   * Один бросок d20
-   */
   const rollD20 = () => {
     return Math.floor(
       Math.random() * 20
     ) + 1
   }
 
-  /*
-   * Определяет естественный результат d20.
-   *
-   * Важно:
-   * natural 20 и natural 1
-   * определяются ДО добавления модификатора.
-   */
   const getRollType = (roll) => {
     if (roll === 20) {
       return 'critical'
@@ -34,8 +24,10 @@ export const useDice = () => {
     const first = rollD20()
     const second = rollD20()
 
-    const result =
-      Math.max(first, second)
+    const result = Math.max(
+      first,
+      second
+    )
 
     return {
       rolls: [first, second],
@@ -50,23 +42,16 @@ export const useDice = () => {
     const first = rollD20()
     const second = rollD20()
 
-    const result =
-      Math.min(first, second)
+    const result = Math.min(
+      first,
+      second
+    )
 
     return {
       rolls: [first, second],
       result
     }
   }
-
-  /*
-   * Универсальный бросок проверки.
-   *
-   * mode:
-   * normal
-   * advantage
-   * disadvantage
-   */
   const rollCheck = (
     modifier = 0,
     mode = 'normal'
@@ -93,10 +78,6 @@ export const useDice = () => {
       rolls = [roll]
     }
 
-    /*
-     * Тип определяется по выбранному
-     * итоговому d20.
-     */
     const rollType =
       getRollType(roll)
 
@@ -108,9 +89,6 @@ export const useDice = () => {
       mode,
       rollType,
 
-      /*
-       * Удобные флаги для UI
-       */
       isCritical:
         rollType === 'critical',
 
@@ -119,11 +97,119 @@ export const useDice = () => {
     }
   }
 
+  const rollDie = (sides) => {
+    return Math.floor(
+      Math.random() * sides
+    ) + 1
+  }
+
+  const rollDice = (
+    count,
+    sides
+  ) => {
+    const rolls = []
+
+    for (
+      let i = 0;
+      i < count;
+      i++
+    ) {
+      rolls.push(
+        rollDie(sides)
+      )
+    }
+
+    const total = rolls.reduce(
+      (sum, roll) =>
+        sum + roll,
+      0
+    )
+
+    return {
+      rolls,
+      total,
+      count,
+      sides
+    }
+  }
+
+  const parseDice = (dice) => {
+    if (
+      typeof dice !== 'string'
+    ) {
+      return null
+    }
+
+    const match = dice
+      .trim()
+      .toLowerCase()
+      .match(/^(\d+)d(\d+)$/)
+
+    if (!match) {
+      return null
+    }
+
+    const count =
+      Number(match[1])
+
+    const sides =
+      Number(match[2])
+
+    if (
+      count <= 0 ||
+      sides <= 0
+    ) {
+      return null
+    }
+
+    return {
+      count,
+      sides
+    }
+  }
+
+  const rollDamage = (
+    dice,
+    {
+      critical = false
+    } = {}
+  ) => {
+    const parsed =
+      parseDice(dice)
+
+    if (!parsed) {
+      return null
+    }
+
+    const count =
+      critical
+        ? parsed.count * 2
+        : parsed.count
+
+    const result =
+      rollDice(
+        count,
+        parsed.sides
+      )
+
+    return {
+      ...result,
+      dice,
+      critical
+    }
+  }
+
   return {
     rollD20,
     rollD20WithAdvantage,
     rollD20WithDisadvantage,
+
     getRollType,
-    rollCheck
+    rollCheck,
+
+    rollDie,
+    rollDice,
+    parseDice,
+    rollDamage
   }
 }

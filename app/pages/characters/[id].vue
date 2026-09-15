@@ -1,7 +1,8 @@
 <script setup>
 import {
   onMounted,
-  computed
+  computed,
+  watch
 } from 'vue'
 
 import SavedCharacterOverview
@@ -25,6 +26,15 @@ import SavedCharacterAttacks
 import SavedCharacterSkills
   from '~/components/character/saved/SavedCharacterSkills.vue'
 
+import CombatInitiative
+  from '~/components/combat/CombatInitiative.vue'
+
+import CombatActions
+  from '~/components/combat/CombatActions.vue'
+
+import CombatIncomingAttack
+  from '~/components/combat/CombatIncomingAttack.vue'
+
 const route = useRoute()
 
 const charactersStore = useCharactersStore()
@@ -39,12 +49,6 @@ const character = computed(() => {
   )
 })
 
-/*
-|--------------------------------------------------------------------------
-| Данные персонажа
-|--------------------------------------------------------------------------
-*/
-
 const {
   race,
   subrace,
@@ -56,24 +60,12 @@ const {
   selectedSkills
 } = useSavedCharacterData(character)
 
-/*
-|--------------------------------------------------------------------------
-| HP
-|--------------------------------------------------------------------------
-*/
-
 const {
   maxHitPoints
 } = useSavedCharacterHP(
   character,
   characterClass
 )
-
-/*
-|--------------------------------------------------------------------------
-| AC
-|--------------------------------------------------------------------------
-*/
 
 const {
   armorClass
@@ -83,25 +75,36 @@ const {
   shield
 )
 
-/*
-|--------------------------------------------------------------------------
-| Основные характеристики
-|--------------------------------------------------------------------------
-*/
-
 const {
   abilityModifiers,
   proficiencyBonus
 } = useSavedCharacterStats(character)
+
+const {
+  addCharacter
+} = useCombat()
+
+watch(
+  character,
+  value => {
+    if (!value) {
+      return
+    }
+
+    addCharacter(
+      value,
+      armorClass.value,
+      maxHitPoints.value
+    )
+  },
+  {
+    immediate: true
+  }
+)
 </script>
 
 <template>
   <div class="max-w-4xl mx-auto p-8">
-
-    <!-- ========================================================= -->
-    <!-- ПЕРСОНАЖ НЕ НАЙДЕН -->
-    <!-- ========================================================= -->
-
     <div
       v-if="!character"
       class="text-gray-500"
@@ -109,16 +112,7 @@ const {
       Персонаж не найден.
     </div>
 
-    <!-- ========================================================= -->
-    <!-- ПЕРСОНАЖ -->
-    <!-- ========================================================= -->
-
     <div v-else>
-
-      <!-- ======================================================= -->
-      <!-- ИМЯ И УРОВЕНЬ -->
-      <!-- ======================================================= -->
-
       <h1 class="text-3xl font-bold">
         {{ character.name || 'Без имени' }}
       </h1>
@@ -128,10 +122,6 @@ const {
         {{ character.level }}
       </p>
 
-      <!-- ======================================================= -->
-      <!-- ОСНОВНЫЕ ХАРАКТЕРИСТИКИ -->
-      <!-- ======================================================= -->
-
       <SavedCharacterOverview
         :character="character"
         :armor-class="armorClass"
@@ -140,27 +130,15 @@ const {
         :proficiency-bonus="proficiencyBonus"
       />
 
-      <!-- ======================================================= -->
-      <!-- ПРОВЕРКИ ХАРАКТЕРИСТИК -->
-      <!-- ======================================================= -->
-
       <SavedCharacterAbilityChecks
         :character="character"
         :character-class="characterClass"
       />
 
-      <!-- ======================================================= -->
-      <!-- СПАСБРОСКИ -->
-      <!-- ======================================================= -->
-
       <SavedCharacterSavingThrows
         :character="character"
         :character-class="characterClass"
       />
-
-      <!-- ======================================================= -->
-      <!-- ВЫБОР ПЕРСОНАЖА -->
-      <!-- ======================================================= -->
 
       <SavedCharacterIdentity
         :race="race"
@@ -169,19 +147,11 @@ const {
         :subclass="subclass"
       />
 
-      <!-- ======================================================= -->
-      <!-- ЭКИПИРОВКА -->
-      <!-- ======================================================= -->
-
       <SavedCharacterEquipment
         :armor="armor"
         :shield="shield"
         :weapon="weapon"
       />
-
-      <!-- ======================================================= -->
-      <!-- АТАКИ -->
-      <!-- ======================================================= -->
 
       <SavedCharacterAttacks
         :character="character"
@@ -189,18 +159,16 @@ const {
         :character-class="characterClass"
       />
 
-      <!-- ======================================================= -->
-      <!-- НАВЫКИ -->
-      <!-- ======================================================= -->
+      <CombatInitiative />
+
+      <CombatActions />
+
+      <CombatIncomingAttack />
 
       <SavedCharacterSkills
         :character="character"
         :selected-skills="selectedSkills"
       />
-
-      <!-- ======================================================= -->
-      <!-- НАЗАД -->
-      <!-- ======================================================= -->
 
       <div class="mt-6">
         <NuxtLink
@@ -210,7 +178,6 @@ const {
           ← Назад к персонажам
         </NuxtLink>
       </div>
-
     </div>
   </div>
 </template>
