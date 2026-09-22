@@ -12,16 +12,19 @@ const {
 const {
   hasArmor,
   hasShield,
-  armorPenalty,
-  shieldPenalty
+  armorNonProficiency,
+  shieldNonProficiency
 } = useCharacterEquipment()
 
 const {
   getAbilityCheckModifier,
-  getSavingThrowModifier,
   hasAbilityCheckDisadvantage,
   hasSavingThrowDisadvantage
 } = useCharacterChecks()
+
+const {
+  getSavingThrowModifier
+} = useCharacterSaves()
 
 const abilities = [
   { id: 'strength', name: 'Сила' },
@@ -45,7 +48,6 @@ const formatModifier = (modifier) => {
       Производные характеристики
     </h2>
 
-    <!-- Уровень -->
     <div class="mt-4">
       <p class="text-sm text-gray-500">
         Уровень
@@ -56,7 +58,6 @@ const formatModifier = (modifier) => {
       </p>
     </div>
 
-    <!-- HP -->
     <div class="mt-4">
       <p class="text-sm text-gray-500">
         Максимальное HP
@@ -67,7 +68,6 @@ const formatModifier = (modifier) => {
       </p>
     </div>
 
-    <!-- AC -->
     <div class="mt-4">
       <p class="text-sm text-gray-500">
         Класс защиты (AC)
@@ -78,14 +78,12 @@ const formatModifier = (modifier) => {
       </p>
     </div>
 
-    <!-- Экипировка -->
     <div class="mt-6">
       <p class="text-sm text-gray-500">
         Экипировка
       </p>
 
       <div class="mt-2 space-y-1">
-        <!-- Броня -->
         <p
           v-if="!hasArmor"
           class="text-sm"
@@ -94,7 +92,7 @@ const formatModifier = (modifier) => {
         </p>
 
         <p
-          v-else-if="armorPenalty"
+          v-else-if="armorNonProficiency"
           class="text-sm"
         >
           ⚠ Нет владения бронёй
@@ -107,7 +105,6 @@ const formatModifier = (modifier) => {
           ✓ Есть владение бронёй
         </p>
 
-        <!-- Щит -->
         <p
           v-if="!hasShield"
           class="text-sm"
@@ -116,7 +113,7 @@ const formatModifier = (modifier) => {
         </p>
 
         <p
-          v-else-if="shieldPenalty"
+          v-else-if="shieldNonProficiency"
           class="text-sm"
         >
           ⚠ Нет владения щитом
@@ -131,7 +128,6 @@ const formatModifier = (modifier) => {
       </div>
     </div>
 
-    <!-- Проверки и спасброски -->
     <div class="mt-6">
       <p class="text-sm text-gray-500">
         Проверки и спасброски
@@ -149,6 +145,7 @@ const formatModifier = (modifier) => {
 
           <p class="text-sm">
             Проверка:
+
             <strong>
               {{ formatModifier(
                 getAbilityCheckModifier(ability.id)
@@ -165,6 +162,7 @@ const formatModifier = (modifier) => {
 
           <p class="text-sm">
             Спасбросок:
+
             <strong>
               {{ formatModifier(
                 getSavingThrowModifier(ability.id)

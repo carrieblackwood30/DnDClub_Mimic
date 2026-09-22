@@ -1,11 +1,10 @@
 <script setup>
 const {
-  getSavingThrowModifier
-} = useCharacterChecks()
-
-const {
-  hasSavingThrowProficiency
-} = useCharacterProficiency()
+  getSavingThrowModifier,
+  isSavingThrowProficient,
+  hasSavingThrowDisadvantage,
+  rollSavingThrow
+} = useCharacterSaves()
 
 const abilities = [
   {
@@ -65,7 +64,7 @@ const formatModifier = (modifier) => {
 
         <div class="flex items-center gap-2">
           <span
-            v-if="hasSavingThrowProficiency(ability.id)"
+            v-if="isSavingThrowProficient(ability.id)"
             class="text-sm"
           >
             ✓ Владение

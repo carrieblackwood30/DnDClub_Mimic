@@ -6,9 +6,7 @@ import { useDice } from '~/composables/useDice'
 
 export const useCharacterChecks = () => {
   const { abilityModifiers } = useCharacterStats()
-
   const { savingThrowProficiencies } = useCharacterClass()
-
   const { proficiencyBonus } = useCharacterProficiency()
 
   const {
@@ -23,14 +21,14 @@ export const useCharacterChecks = () => {
   }
 
   const getSavingThrowModifier = (ability) => {
-    const baseModifier =
-      abilityModifiers.value[ability] ?? 0
+    const modifier = abilityModifiers.value[ability] ?? 0
+    const proficient = savingThrowProficiencies.value.includes(ability)
 
-    const isProficient =
-      savingThrowProficiencies.value.includes(ability)
-
-    return baseModifier +
-      (isProficient ? proficiencyBonus.value : 0)
+    return modifier + (
+      proficient
+        ? proficiencyBonus.value
+        : 0
+    )
   }
 
   const hasAbilityCheckDisadvantage = (ability) => {
@@ -59,25 +57,21 @@ export const useCharacterChecks = () => {
 
   const rollAbilityCheck = (ability) => {
     const modifier = getAbilityCheckModifier(ability)
-
-    const hasDisadvantage =
-      hasAbilityCheckDisadvantage(ability)
+    const disadvantage = hasAbilityCheckDisadvantage(ability)
 
     return rollCheck(
       modifier,
-      hasDisadvantage ? 'disadvantage' : 'normal'
+      disadvantage ? 'disadvantage' : 'normal'
     )
   }
 
   const rollSavingThrow = (ability) => {
     const modifier = getSavingThrowModifier(ability)
-
-    const hasDisadvantage =
-      hasSavingThrowDisadvantage(ability)
+    const disadvantage = hasSavingThrowDisadvantage(ability)
 
     return rollCheck(
       modifier,
-      hasDisadvantage ? 'disadvantage' : 'normal'
+      disadvantage ? 'disadvantage' : 'normal'
     )
   }
 

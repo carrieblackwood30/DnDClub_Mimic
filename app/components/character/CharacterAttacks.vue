@@ -6,6 +6,8 @@ import {
   weaponTypeNames
 } from '~/data/weaponTranslations'
 
+import { useCharacterAttacks } from '~/composables/useCharacterAttacks'
+
 const {
   attack,
   hasWeapon
@@ -18,19 +20,37 @@ const formatModifier = (modifier) => {
 }
 
 const getAbilityName = (ability) => {
-  return weaponAbilityNames[ability] ?? ability
+  return (
+    weaponAbilityNames[ability] ??
+    ability
+  )
 }
 
-const getDamageTypeName = (damageType) => {
-  return weaponDamageTypeNames[damageType] ?? damageType
+const getDamageTypeName = (
+  damageType
+) => {
+  return (
+    weaponDamageTypeNames[damageType] ??
+    damageType
+  )
 }
 
-const getPropertyName = (property) => {
-  return weaponPropertyNames[property] ?? property
+const getPropertyName = (
+  property
+) => {
+  return (
+    weaponPropertyNames[property] ??
+    property
+  )
 }
 
-const getWeaponTypeName = (type) => {
-  return weaponTypeNames[type] ?? type
+const getWeaponTypeName = (
+  type
+) => {
+  return (
+    weaponTypeNames[type] ??
+    type
+  )
 }
 
 const getWeaponRange = (weapon) => {
@@ -39,8 +59,10 @@ const getWeaponRange = (weapon) => {
   }
 
   return {
-    normal: `${weapon.range.normal} футов`,
-    long: `${weapon.range.long} футов`
+    normal:
+      `${weapon.range.normal} футов`,
+    long:
+      `${weapon.range.long} футов`
   }
 }
 </script>
@@ -52,73 +74,98 @@ const getWeaponRange = (weapon) => {
     </h2>
 
     <div
-      v-if="!hasWeapon"
+      v-if="!attack"
       class="mt-4 text-sm text-gray-500"
     >
-      Оружие не выбрано.
+      Атака недоступна.
     </div>
 
     <div
       v-else
       class="mt-4 border rounded-lg p-3"
     >
-      <!-- Название -->
       <h3 class="text-lg font-semibold">
         {{ attack.weapon.name }}
       </h3>
 
       <p class="mt-1 text-sm text-gray-500">
         Тип:
-    {{ getWeaponTypeName(attack.weapon.type) }}
-    </p>
-    
-    <div
-      v-if="attack.weapon.range"
-      class="mt-1 text-sm text-gray-500"
-    >
-      <p>
-        Дистанция:
-        {{ getWeaponRange(attack.weapon).normal }}
+        {{
+          getWeaponTypeName(
+            attack.weapon.type
+          )
+        }}
       </p>
 
-      <p>
-        Дальняя дистанция:
-        {{ getWeaponRange(attack.weapon).long }}
-      </p>
-    </div>
+      <div
+        v-if="attack.weapon.range"
+        class="mt-1 text-sm text-gray-500"
+      >
+        <p>
+          Дистанция:
+          {{
+            getWeaponRange(
+              attack.weapon
+            ).normal
+          }}
+        </p>
 
-      <!-- Бонус атаки -->
+        <p>
+          Дальняя дистанция:
+          {{
+            getWeaponRange(
+              attack.weapon
+            ).long
+          }}
+        </p>
+      </div>
+
       <p class="mt-2 text-sm">
         Бонус атаки:
         <strong>
-          {{ formatModifier(attack.attackModifier) }}
+          {{
+            formatModifier(
+              attack.attackModifier
+            )
+          }}
         </strong>
       </p>
 
-      <!-- Урон -->
       <p class="mt-2 text-sm">
         Урон:
         <strong>
           {{ attack.weapon.damage }}
-          {{ formatModifier(attack.damageModifier) }}
+          {{
+            formatModifier(
+              attack.damageModifier
+            )
+          }}
         </strong>
 
-        {{ getDamageTypeName(attack.weapon.damageType) }}
+        {{
+          getDamageTypeName(
+            attack.weapon.damageType
+          )
+        }}
       </p>
 
-      <!-- Характеристика -->
       <p class="mt-2 text-sm">
         Характеристика:
         <strong>
-          {{ getAbilityName(attack.attackAbility) }}
+          {{
+            getAbilityName(
+              attack.ability
+            )
+          }}
         </strong>
       </p>
 
-      <!-- Владение -->
       <p class="mt-2 text-sm">
         Владение:
 
-        <span v-if="attack.hasProficiency">
+        <span
+          v-if="attack.hasProficiency"
+        >
           ✓ Есть
         </span>
 
@@ -127,23 +174,33 @@ const getWeaponRange = (weapon) => {
         </span>
       </p>
 
-      <!-- Свойства -->
       <div
-        v-if="attack.weapon.properties?.length"
+        v-if="
+          attack.weapon.properties?.length
+        "
         class="mt-3"
       >
         <p class="text-sm text-gray-500">
           Свойства:
         </p>
 
-        <div class="mt-1 flex flex-wrap gap-1">
+        <div
+          class="mt-1 flex flex-wrap gap-1"
+        >
           <span
-            v-for="property in attack.weapon.properties"
+            v-for="
+              property in
+              attack.weapon.properties
+            "
             :key="property"
             class="text-xs border rounded px-2 py-1"
-            >
-            {{ getPropertyName(property) }}
-            </span>
+          >
+            {{
+              getPropertyName(
+                property
+              )
+            }}
+          </span>
         </div>
       </div>
     </div>

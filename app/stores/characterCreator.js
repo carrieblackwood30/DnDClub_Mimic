@@ -159,8 +159,8 @@ export const useCharacterCreatorStore = defineStore('characterCreator', () => {
     spellSlots.value = value
   }
 
-  const createCharacter = () => {
-    return {
+  const createCharacter = (finalAbilityScores = null) => {
+     return {
       name: name.value,
       level: level.value,
       raceId: raceId.value,
@@ -172,8 +172,11 @@ export const useCharacterCreatorStore = defineStore('characterCreator', () => {
       weaponId: weaponId.value,
       weaponAbility: weaponAbility.value,
       backgroundId: backgroundId.value,
-      abilityScores: {
+      baseAbilityScores: {
         ...abilityScores
+      },
+      abilityScores: {
+        ...(finalAbilityScores ?? abilityScores)
       },
       selectedSkills: [
         ...selectedSkills.value

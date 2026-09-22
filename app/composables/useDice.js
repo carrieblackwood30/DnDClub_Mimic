@@ -17,9 +17,6 @@ export const useDice = () => {
     return 'normal'
   }
 
-  /*
-   * d20 с преимуществом
-   */
   const rollD20WithAdvantage = () => {
     const first = rollD20()
     const second = rollD20()
@@ -35,9 +32,6 @@ export const useDice = () => {
     }
   }
 
-  /*
-   * d20 с помехой
-   */
   const rollD20WithDisadvantage = () => {
     const first = rollD20()
     const second = rollD20()
@@ -52,6 +46,7 @@ export const useDice = () => {
       result
     }
   }
+
   const rollCheck = (
     modifier = 0,
     mode = 'normal'
@@ -88,10 +83,8 @@ export const useDice = () => {
       total: roll + modifier,
       mode,
       rollType,
-
       isCritical:
         rollType === 'critical',
-
       isCriticalFail:
         rollType === 'critical-fail'
     }
@@ -168,12 +161,58 @@ export const useDice = () => {
     }
   }
 
+  const parseFixedDamage = (
+    damage
+  ) => {
+    if (
+      typeof damage === 'number' &&
+      Number.isFinite(damage)
+    ) {
+      return Math.max(
+        0,
+        damage
+      )
+    }
+
+    if (
+      typeof damage !== 'string'
+    ) {
+      return null
+    }
+
+    const value = damage.trim()
+
+    if (!/^\d+$/.test(value)) {
+      return null
+    }
+
+    return Math.max(
+      0,
+      Number(value)
+    )
+  }
+
   const rollDamage = (
     dice,
     {
       critical = false
     } = {}
   ) => {
+    const fixedDamage =
+      parseFixedDamage(dice)
+
+    if (fixedDamage !== null) {
+      return {
+        rolls: [],
+        total: fixedDamage,
+        count: 0,
+        sides: 0,
+        dice,
+        critical,
+        isFixed: true
+      }
+    }
+
     const parsed =
       parseDice(dice)
 
@@ -195,7 +234,8 @@ export const useDice = () => {
     return {
       ...result,
       dice,
-      critical
+      critical,
+      isFixed: false
     }
   }
 
@@ -203,10 +243,8 @@ export const useDice = () => {
     rollD20,
     rollD20WithAdvantage,
     rollD20WithDisadvantage,
-
     getRollType,
     rollCheck,
-
     rollDie,
     rollDice,
     parseDice,

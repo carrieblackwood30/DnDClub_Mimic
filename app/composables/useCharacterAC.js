@@ -2,8 +2,11 @@ import { computed } from 'vue'
 
 export const useCharacterAC = () => {
   const characterCreator = useCharacterCreatorStore()
+
   const armorsStore = useArmorsStore()
   const shieldsStore = useShieldsStore()
+
+  const { abilityScores } = useCharacterStats()
 
   const armor = computed(() => {
     if (!characterCreator.armorId) {
@@ -28,7 +31,8 @@ export const useCharacterAC = () => {
   })
 
   const dexterityModifier = computed(() => {
-    const dexterity = characterCreator.abilityScores.dexterity
+    const dexterity =
+      abilityScores.value.dexterity ?? 10
 
     return Math.floor((dexterity - 10) / 2)
   })
@@ -61,19 +65,18 @@ export const useCharacterAC = () => {
   })
 
   const meetsStrengthRequirement = computed(() => {
-  if (!armor.value) {
-    return true
-  }
+    if (!armor.value) {
+      return true
+    }
 
-  if (!armor.value.strengthRequirement) {
-    return true
-  }
+    const requirement =
+      armor.value.strengthRequirement ?? 0
 
-  return (
-    characterCreator.abilityScores.strength >=
-    armor.value.strengthRequirement
-  )
-})
+    const strength =
+      abilityScores.value.strength ?? 10
+
+    return strength >= requirement
+  })
 
   return {
     armor,

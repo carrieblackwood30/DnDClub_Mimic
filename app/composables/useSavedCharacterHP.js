@@ -15,10 +15,26 @@ export const useSavedCharacterHP = (character, characterClass) => {
     const constitutionModifier =
       Math.floor((constitutionScore - 10) / 2)
 
-    const hitPoints =
-      level * (hitDie + constitutionModifier)
+    const firstLevelHP =
+      Math.max(1, hitDie + constitutionModifier)
 
-    return Math.max(hitPoints, level)
+    if (level === 1) {
+      return firstLevelHP
+    }
+
+    const hitDieAverage =
+      Math.floor(hitDie / 2) + 1
+
+    const hpPerLevel =
+      Math.max(
+        1,
+        hitDieAverage + constitutionModifier
+      )
+
+    return (
+      firstLevelHP +
+      hpPerLevel * (level - 1)
+    )
   })
 
   return {

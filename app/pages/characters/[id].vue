@@ -32,6 +32,9 @@ import CombatInitiative
 import CombatActions
   from '~/components/combat/CombatActions.vue'
 
+import CombatSpellcasting
+  from '~/components/combat/CombatSpellcasting.vue'
+
 import CombatIncomingAttack
   from '~/components/combat/CombatIncomingAttack.vue'
 
@@ -104,7 +107,7 @@ watch(
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto p-8">
+  <div class="max-w-5xl mx-auto p-6">
     <div
       v-if="!character"
       class="text-gray-500"
@@ -113,62 +116,76 @@ watch(
     </div>
 
     <div v-else>
-      <h1 class="text-3xl font-bold">
-        {{ character.name || 'Без имени' }}
-      </h1>
+      <div class="mb-6">
+        <h1 class="text-3xl font-bold">
+          {{ character.name || 'Без имени' }}
+        </h1>
 
-      <p class="mt-2">
-        Уровень:
-        {{ character.level }}
-      </p>
+        <p class="mt-1 text-gray-500">
+          {{ characterClass?.name || 'Класс не выбран' }}
+          · Уровень {{ character.level }}
+        </p>
+      </div>
 
-      <SavedCharacterOverview
-        :character="character"
-        :armor-class="armorClass"
-        :max-hit-points="maxHitPoints"
-        :ability-modifiers="abilityModifiers"
-        :proficiency-bonus="proficiencyBonus"
-      />
+      <div class="grid gap-6">
+        <SavedCharacterOverview
+          :character="character"
+          :armor-class="armorClass"
+          :max-hit-points="maxHitPoints"
+          :ability-modifiers="abilityModifiers"
+          :proficiency-bonus="proficiencyBonus"
+        />
 
-      <SavedCharacterAbilityChecks
-        :character="character"
-        :character-class="characterClass"
-      />
+        <SavedCharacterAbilityChecks
+          :character="character"
+          :character-class="characterClass"
+        />
 
-      <SavedCharacterSavingThrows
-        :character="character"
-        :character-class="characterClass"
-      />
+        <SavedCharacterSavingThrows
+          :character="character"
+          :character-class="characterClass"
+        />
 
-      <SavedCharacterIdentity
-        :race="race"
-        :subrace="subrace"
-        :character-class="characterClass"
-        :subclass="subclass"
-      />
+        <SavedCharacterIdentity
+          :race="race"
+          :subrace="subrace"
+          :character-class="characterClass"
+          :subclass="subclass"
+        />
 
-      <SavedCharacterEquipment
-        :armor="armor"
-        :shield="shield"
-        :weapon="weapon"
-      />
+        <SavedCharacterEquipment
+          :armor="armor"
+          :shield="shield"
+          :weapon="weapon"
+        />
 
-      <SavedCharacterAttacks
-        :character="character"
-        :weapon="weapon"
-        :character-class="characterClass"
-      />
+        <SavedCharacterAttacks
+          :character="character"
+          :weapon="weapon"
+          :character-class="characterClass"
+        />
 
-      <CombatInitiative />
+        <section class="border rounded-xl p-4">
+          <h2 class="text-xl font-bold">
+            Бой
+          </h2>
 
-      <CombatActions />
+          <div class="mt-4 grid gap-4">
+            <CombatInitiative />
 
-      <CombatIncomingAttack />
+            <CombatActions />
 
-      <SavedCharacterSkills
-        :character="character"
-        :selected-skills="selectedSkills"
-      />
+            <CombatSpellcasting />
+
+            <CombatIncomingAttack />
+          </div>
+        </section>
+
+        <SavedCharacterSkills
+          :character="character"
+          :selected-skills="selectedSkills"
+        />
+      </div>
 
       <div class="mt-6">
         <NuxtLink

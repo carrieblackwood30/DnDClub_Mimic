@@ -5,7 +5,8 @@ export const useCharacterEquipment = () => {
 
   const {
     armor,
-    hasArmorProficiency
+    hasArmorProficiency,
+    meetsStrengthRequirement
   } = useCharacterArmor()
 
   const {
@@ -13,63 +14,39 @@ export const useCharacterEquipment = () => {
     hasShieldProficiency
   } = useCharacterShield()
 
-  // Экипирована ли броня
   const hasArmor = computed(() => {
-    return (
-      characterCreator.armorId !== null &&
-      characterCreator.armorId !== undefined &&
-      characterCreator.armorId !== ''
-    )
+    return Boolean(characterCreator.armorId)
   })
 
-  // Экипирован ли щит
   const hasShield = computed(() => {
-    return (
-      characterCreator.shieldId !== null &&
-      characterCreator.shieldId !== undefined &&
-      characterCreator.shieldId !== ''
-    )
+    return Boolean(characterCreator.shieldId)
   })
 
-  // Есть ли штраф из-за отсутствия владения бронёй
-  const armorPenalty = computed(() => {
-    if (!hasArmor.value) {
-      return false
-    }
-
-    return !hasArmorProficiency.value
+  const armorNonProficiency = computed(() => {
+    return hasArmor.value &&
+      !hasArmorProficiency.value
   })
 
-  // Есть ли штраф из-за отсутствия владения щитом
-  const shieldPenalty = computed(() => {
-    if (!hasShield.value) {
-      return false
-    }
-
-    return !hasShieldProficiency.value
+  const shieldNonProficiency = computed(() => {
+    return hasShield.value &&
+      !hasShieldProficiency.value
   })
 
-  // Есть ли вообще проблемы с экипировкой
-  const hasEquipmentPenalty = computed(() => {
-    return (
-      armorPenalty.value ||
-      shieldPenalty.value
-    )
+  const armorStrengthRequirementFailed = computed(() => {
+    return hasArmor.value &&
+      !meetsStrengthRequirement.value
   })
 
   return {
     armor,
     shield,
-
     hasArmor,
     hasShield,
-
     hasArmorProficiency,
     hasShieldProficiency,
-
-    armorPenalty,
-    shieldPenalty,
-
-    hasEquipmentPenalty
+    meetsStrengthRequirement,
+    armorNonProficiency,
+    shieldNonProficiency,
+    armorStrengthRequirementFailed
   }
 }

@@ -4,6 +4,9 @@ export const useCharacterAttacks = () => {
   const {
     weapon,
     hasWeapon,
+    isFinesse,
+    isRanged,
+    isThrown,
     hasWeaponProficiency,
     attackAbility,
     attackModifier,
@@ -17,14 +20,13 @@ export const useCharacterAttacks = () => {
 
     return {
       weapon: weapon.value,
-
-      attackAbility: attackAbility.value,
-
+      ability: attackAbility.value,
       attackModifier: attackModifier.value,
-
       damageModifier: damageModifier.value,
-
-      hasProficiency: hasWeaponProficiency.value
+      hasProficiency: hasWeaponProficiency.value,
+      isFinesse: isFinesse.value,
+      isRanged: isRanged.value,
+      isThrown: isThrown.value
     }
   })
 

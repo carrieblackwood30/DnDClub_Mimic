@@ -1,17 +1,16 @@
 <script setup>
-import { ref, toRef, computed } from 'vue'
+import { computed, ref, toRef } from 'vue'
+import { useSavedCharacterAttacks } from '~/composables/useSavedCharacterAttacks'
 
 const props = defineProps({
   character: {
     type: Object,
     required: true
   },
-
   weapon: {
     type: Object,
     default: null
   },
-
   characterClass: {
     type: Object,
     default: null
@@ -35,6 +34,7 @@ const characterClassRef = toRef(
 
 const {
   attack,
+  attackCount,
   rollAttack,
   rollAttackDamage
 } = useSavedCharacterAttacks(
@@ -48,7 +48,8 @@ const {
 } = useAttackResolution()
 
 const {
-  canParticipantAct
+  canParticipantAct,
+  getEffectiveArmorClass
 } = useCombat()
 
 const combatStore = useCombatStore()
@@ -63,9 +64,40 @@ const canAttack = computed(() => {
   )
 })
 
-const lastAttack = ref(null)
-const lastDamage = ref(null)
-const lastAppliedDamage = ref(null)
+const attackActionActive = computed(() => {
+  const participant =
+    combatStore.participants.find(
+      item =>
+        item.id ===
+        characterParticipantId.value
+    )
+
+  return participant?.attackActionActive ?? false
+})
+
+const attacksUsed = computed(() => {
+  const participant =
+    combatStore.participants.find(
+      item =>
+        item.id ===
+        characterParticipantId.value
+    )
+
+  return participant?.attackActionAttacksUsed ?? 0
+})
+
+const canMakeAttack = computed(() => {
+  if (!canAttack.value) {
+    return false
+  }
+
+  return combatStore.canUseAttackActionAttack(
+    characterParticipantId.value,
+    attackCount.value
+  )
+})
+
+const attacks = ref([])
 
 const abilities = [
   {
@@ -122,19 +154,13 @@ const getModeName = (mode) => {
 
 const selectTarget = (targetId) => {
   combatStore.selectTarget(targetId)
-
-  lastAttack.value = null
-  lastDamage.value = null
-  lastAppliedDamage.value = null
 }
 
-const rollWeaponAttack = (
-  mode = 'normal'
-) => {
+const rollWeaponAttack = (mode = 'normal') => {
   const target =
     combatStore.selectedTarget
 
-  if (!canAttack.value) {
+  if (!canMakeAttack.value) {
     return
   }
 
@@ -145,14 +171,8 @@ const rollWeaponAttack = (
     return
   }
 
-  const actionUsed =
-    combatStore.useAction(
-      characterParticipantId.value
-    )
-
-  if (!actionUsed) {
-    return
-  }
+  const startsNewAttackAction =
+    !attackActionActive.value
 
   const result = rollAttack(mode)
 
@@ -160,52 +180,88 @@ const rollWeaponAttack = (
     return
   }
 
-  const resolution = resolveAttack(
-    result.roll,
-    attack.value.attackModifier,
-    target.armorClass
-  )
+  const actionAttackUsed =
+    combatStore.useAttackActionAttack(
+      characterParticipantId.value,
+      attackCount.value
+    )
 
-  lastAttack.value = {
-    ...result,
-    ...resolution
+  if (!actionAttackUsed) {
+    return
   }
 
-  lastDamage.value = null
-  lastAppliedDamage.value = null
+  if (startsNewAttackAction) {
+    attacks.value = []
+  }
+
+  const targetAC =
+    getEffectiveArmorClass(target.id)
+
+  const resolution =
+    resolveAttack(
+      result.roll,
+      attack.value.attackModifier,
+      targetAC
+    )
+
+  attacks.value.push({
+    id:
+      `${characterParticipantId.value}-${Date.now()}-${Math.random()}`,
+    number: attacksUsed.value,
+    targetId: target.id,
+    targetName: target.name,
+    ...result,
+    ...resolution,
+    targetAC,
+    damage: null,
+    appliedDamage: null
+  })
 }
 
-const rollWeaponDamage = () => {
-  const target =
-    combatStore.selectedTarget
+const rollWeaponDamage = (attackId) => {
+  const attackResult = attacks.value.find(
+    item => item.id === attackId
+  )
 
   if (
-    !target ||
-    !lastAttack.value ||
-    lastAttack.value.miss ||
-    lastAttack.value.criticalFail
+    !attackResult ||
+    !attackResult.hit ||
+    attackResult.damage
   ) {
     return
   }
 
-  const result = rollAttackDamage(
-    lastAttack.value.critical
-  )
+  const target =
+    combatStore.participants.find(
+      participant =>
+        participant.id ===
+        attackResult.targetId
+    )
+
+  if (!target) {
+    return
+  }
+
+  const result =
+    rollAttackDamage(
+      attackResult.critical
+    )
 
   if (!result) {
     return
   }
 
-  lastDamage.value = result
-
-  const damage =
+  const totalDamage = Math.max(
+    0,
     result.total +
-    attack.value.damageModifier
+      attack.value.damageModifier
+  )
 
-  lastAppliedDamage.value =
+  attackResult.damage = result
+  attackResult.appliedDamage =
     combatStore.applyDamage(
       target.id,
-      damage
+      totalDamage
     )
 }
 
@@ -217,13 +273,8 @@ const resetTarget = () => {
     return
   }
 
-  combatStore.resetTarget(
-    target.id
-  )
-
-  lastAttack.value = null
-  lastDamage.value = null
-  lastAppliedDamage.value = null
+  combatStore.resetTarget(target.id)
+  attacks.value = []
 }
 </script>
 
@@ -237,7 +288,7 @@ const resetTarget = () => {
       v-if="!attack"
       class="mt-3 text-sm text-gray-500"
     >
-      Оружие не выбрано.
+      Атака недоступна.
     </div>
 
     <div
@@ -254,7 +305,6 @@ const resetTarget = () => {
 
           <p class="text-sm text-gray-500">
             Бонус атаки:
-
             <strong>
               {{
                 formatModifier(
@@ -267,7 +317,6 @@ const resetTarget = () => {
 
         <div
           v-if="attack.hasProficiency"
-          title="Владение оружием"
           class="text-lg"
         >
           ✓
@@ -281,10 +330,11 @@ const resetTarget = () => {
         </div>
       </div>
 
-      <div class="mt-3 space-y-1 text-sm">
+      <div
+        class="mt-3 space-y-1 text-sm"
+      >
         <p>
           Характеристика:
-
           <strong>
             {{
               getAbilityName(
@@ -296,10 +346,8 @@ const resetTarget = () => {
 
         <p>
           Урон:
-
           <strong>
             {{ attack.weapon.damage }}
-
             {{
               formatModifier(
                 attack.damageModifier
@@ -312,23 +360,27 @@ const resetTarget = () => {
           v-if="attack.weapon.damageType"
         >
           Тип урона:
-
           {{ attack.weapon.damageType }}
         </p>
 
         <p
-          v-if="
-            attack.weapon.properties?.length
-          "
+          v-if="attack.weapon.properties?.length"
         >
           Свойства:
-
-          {{ attack.weapon.properties.join(', ') }}
+          {{
+            attack.weapon.properties.join(
+              ', '
+            )
+          }}
         </p>
       </div>
 
-      <div class="mt-4 border-t pt-4">
-        <p class="text-sm font-semibold mb-2">
+      <div
+        class="mt-4 border-t pt-4"
+      >
+        <p
+          class="text-sm font-semibold mb-2"
+        >
           Цель
         </p>
 
@@ -344,9 +396,7 @@ const resetTarget = () => {
               )
             "
           >
-            <option
-              value=""
-            >
+            <option value="">
               Выберите цель
             </option>
 
@@ -367,7 +417,6 @@ const resetTarget = () => {
           >
             <p>
               Цель:
-
               <strong>
                 {{
                   combatStore.selectedTarget.name
@@ -377,39 +426,26 @@ const resetTarget = () => {
 
             <p>
               AC:
-
               <strong>
                 {{
-                  combatStore.selectedTarget
-                    .armorClass
+                  getEffectiveArmorClass(
+                    combatStore.selectedTarget.id
+                  )
                 }}
               </strong>
             </p>
 
             <p>
               HP:
-
               <strong>
                 {{
-                  combatStore.selectedTarget
-                    .currentHP
+                  combatStore.selectedTarget.currentHP
                 }}
                 /
                 {{
-                  combatStore.selectedTarget
-                    .maxHP
+                  combatStore.selectedTarget.maxHP
                 }}
               </strong>
-            </p>
-
-            <p
-              v-if="
-                combatStore.selectedTarget
-                  .currentHP <= 0
-              "
-              class="mt-2 font-semibold"
-            >
-              💀 Цель повержена
             </p>
 
             <button
@@ -424,43 +460,43 @@ const resetTarget = () => {
       </div>
 
       <div
-        v-if="combatStore.combatStarted"
         class="mt-4 border rounded-lg p-3"
       >
-        <p
-          v-if="canAttack"
-          class="font-semibold"
-        >
-          ⚔ Сейчас ваш ход
+        <p class="font-semibold">
+          Атаки за действие:
+          {{ attacksUsed }}/{{ attackCount }}
         </p>
 
         <p
-          v-else
-          class="text-sm"
+          v-if="combatStore.combatStarted"
+          class="mt-1 text-sm"
         >
-          Сейчас ход:
-
-          <strong>
+          <span v-if="canAttack">
+            Ход вашего персонажа
+          </span>
+          <span v-else>
+            Сейчас ход:
             {{
               combatStore.currentParticipant?.name
             }}
-          </strong>
+          </span>
         </p>
       </div>
 
       <div class="mt-4">
-        <p class="text-sm font-semibold mb-2">
+        <p
+          class="text-sm font-semibold mb-2"
+        >
           Бросок атаки
         </p>
 
-        <div class="flex flex-wrap gap-2">
+        <div
+          class="flex flex-wrap gap-2"
+        >
           <button
             type="button"
             class="border rounded px-3 py-1"
-            :disabled="
-              !combatStore.selectedTarget ||
-              combatStore.selectedTarget.currentHP <= 0
-            "
+            :disabled="!canMakeAttack"
             @click="
               rollWeaponAttack('normal')
             "
@@ -471,14 +507,9 @@ const resetTarget = () => {
           <button
             type="button"
             class="border rounded px-3 py-1"
-            :disabled="
-              !combatStore.selectedTarget ||
-              combatStore.selectedTarget.currentHP <= 0
-            "
+            :disabled="!canMakeAttack"
             @click="
-              rollWeaponAttack(
-                'advantage'
-              )
+              rollWeaponAttack('advantage')
             "
           >
             Преимущество
@@ -487,14 +518,9 @@ const resetTarget = () => {
           <button
             type="button"
             class="border rounded px-3 py-1"
-            :disabled="
-              !combatStore.selectedTarget ||
-              combatStore.selectedTarget.currentHP <= 0
-            "
+            :disabled="!canMakeAttack"
             @click="
-              rollWeaponAttack(
-                'disadvantage'
-              )
+              rollWeaponAttack('disadvantage')
             "
           >
             Помеха
@@ -503,206 +529,228 @@ const resetTarget = () => {
       </div>
 
       <div
-        v-if="lastAttack"
-        class="mt-4 border-t pt-4"
+        v-if="attacks.length"
+        class="mt-4 space-y-4"
       >
-        <p class="font-semibold">
-          Результат атаки
-        </p>
-
         <div
-          v-if="lastAttack.critical"
-          class="mt-3 border rounded-lg p-3"
-        >
-          🎯 КРИТИЧЕСКОЕ ПОПАДАНИЕ!
-        </div>
-
-        <div
-          v-else-if="
-            lastAttack.criticalFail
-          "
-          class="mt-3 border rounded-lg p-3"
-        >
-          💀 КРИТИЧЕСКИЙ ПРОМАХ!
-        </div>
-
-        <div
-          v-else-if="lastAttack.hit"
-          class="mt-3 border rounded-lg p-3"
-        >
-          ⚔ ПОПАДАНИЕ!
-        </div>
-
-        <div
-          v-else
-          class="mt-3 border rounded-lg p-3"
-        >
-          ✕ ПРОМАХ!
-        </div>
-
-        <div class="mt-3 space-y-1">
-          <p>
-            Режим:
-
-            <strong>
-              {{
-                getModeName(
-                  lastAttack.mode
-                )
-              }}
-            </strong>
-          </p>
-
-          <p>
-            Бросок:
-
-            <strong>
-              {{ lastAttack.roll }}
-            </strong>
-          </p>
-
-          <p>
-            Модификатор:
-
-            <strong>
-              {{
-                formatModifier(
-                  lastAttack.modifier
-                )
-              }}
-            </strong>
-          </p>
-
-          <p>
-            Итог:
-
-            <strong>
-              {{ lastAttack.total }}
-            </strong>
-          </p>
-
-          <p>
-            AC цели:
-
-            <strong>
-              {{
-                combatStore.selectedTarget
-                  ?.armorClass
-              }}
-            </strong>
-          </p>
-
-          <p
-            v-if="
-              lastAttack.rolls.length > 1
-            "
-            class="text-sm text-gray-500"
-          >
-            Броски:
-
-            {{ lastAttack.rolls.join(', ') }}
-          </p>
-        </div>
-
-        <div
-          v-if="
-            lastAttack.hit &&
-            !lastAttack.criticalFail
-          "
-          class="mt-4"
-        >
-          <button
-            type="button"
-            class="border rounded px-3 py-1"
-            @click="rollWeaponDamage"
-          >
-            🎲 Бросить урон
-          </button>
-        </div>
-
-        <div
-          v-if="lastDamage"
-          class="mt-4 border-t pt-4"
+          v-for="attackResult in attacks"
+          :key="attackResult.id"
+          class="border rounded-lg p-4"
         >
           <p class="font-semibold">
-            Результат урона
+            Атака #{{ attackResult.number }}
           </p>
 
-          <p class="mt-2">
-            Кубики:
-
+          <p class="text-sm mt-1">
+            Цель:
             <strong>
-              {{ lastDamage.rolls.join(', ') }}
+              {{ attackResult.targetName }}
             </strong>
           </p>
 
-          <p>
-            Сумма кубиков:
+          <div
+            v-if="attackResult.critical"
+            class="mt-3 border rounded-lg p-3"
+          >
+            🎯 КРИТИЧЕСКОЕ ПОПАДАНИЕ!
+          </div>
 
-            <strong>
-              {{ lastDamage.total }}
-            </strong>
-          </p>
+          <div
+            v-else-if="attackResult.criticalFail"
+            class="mt-3 border rounded-lg p-3"
+          >
+            💀 КРИТИЧЕСКИЙ ПРОМАХ!
+          </div>
 
-          <p>
-            Модификатор:
+          <div
+            v-else-if="attackResult.hit"
+            class="mt-3 border rounded-lg p-3"
+          >
+            ⚔ ПОПАДАНИЕ!
+          </div>
 
-            <strong>
-              {{
-                formatModifier(
-                  attack.damageModifier
+          <div
+            v-else
+            class="mt-3 border rounded-lg p-3"
+          >
+            ✕ ПРОМАХ!
+          </div>
+
+          <div
+            class="mt-3 space-y-1"
+          >
+            <p>
+              Режим:
+              <strong>
+                {{
+                  getModeName(
+                    attackResult.mode
+                  )
+                }}
+              </strong>
+            </p>
+
+            <p>
+              Бросок:
+              <strong>
+                {{ attackResult.roll }}
+              </strong>
+            </p>
+
+            <p>
+              Модификатор:
+              <strong>
+                {{
+                  formatModifier(
+                    attackResult.modifier
+                  )
+                }}
+              </strong>
+            </p>
+
+            <p>
+              Итог:
+              <strong>
+                {{ attackResult.total }}
+              </strong>
+            </p>
+
+            <p>
+              AC цели:
+              <strong>
+                {{ attackResult.targetAC }}
+              </strong>
+            </p>
+
+            <p
+              v-if="attackResult.rolls?.length > 1"
+              class="text-sm text-gray-500"
+            >
+              Броски:
+              {{ attackResult.rolls.join(', ') }}
+            </p>
+          </div>
+
+          <div
+            v-if="
+              attackResult.hit &&
+              !attackResult.damage
+            "
+            class="mt-4"
+          >
+            <button
+              type="button"
+              class="border rounded px-3 py-1"
+              @click="
+                rollWeaponDamage(
+                  attackResult.id
                 )
-              }}
-            </strong>
-          </p>
+              "
+            >
+              🎲 Бросить урон
+            </button>
+          </div>
 
-          <p>
-            Общий урон:
-
-            <strong>
-              {{
-                lastDamage.total +
-                attack.damageModifier
-              }}
-            </strong>
-          </p>
-
-          <p
-            v-if="lastAppliedDamage"
-            class="mt-2"
+          <div
+            v-if="attackResult.damage"
+            class="mt-4 border-t pt-4"
           >
-            Получено урона:
+            <p class="font-semibold">
+              Результат урона
+            </p>
 
-            <strong>
-              {{ lastAppliedDamage.damage }}
-            </strong>
-          </p>
+            <p
+              v-if="attackResult.damage.isFixed"
+              class="mt-2"
+            >
+              Фиксированный урон:
+              <strong>
+                {{
+                  attackResult.damage.total
+                }}
+              </strong>
+            </p>
 
-          <p
-            v-if="lastAppliedDamage"
-          >
-            HP цели:
+            <p v-else class="mt-2">
+              Кубики:
+              <strong>
+                {{
+                  attackResult.damage.rolls.join(
+                    ', '
+                  )
+                }}
+              </strong>
+            </p>
 
-            <strong>
-              {{ lastAppliedDamage.currentHP }}
-              /
-              {{ lastAppliedDamage.maxHP }}
-            </strong>
-          </p>
+            <p
+              v-if="!attackResult.damage.isFixed"
+            >
+              Сумма кубиков:
+              <strong>
+                {{
+                  attackResult.damage.total
+                }}
+              </strong>
+            </p>
 
-          <p
-            v-if="lastAppliedDamage?.defeated"
-            class="mt-2 font-semibold"
-          >
-            💀 Цель повержена
-          </p>
+            <p>
+              Модификатор:
+              <strong>
+                {{
+                  formatModifier(
+                    attack.damageModifier
+                  )
+                }}
+              </strong>
+            </p>
 
-          <p
-            v-if="lastDamage.critical"
-            class="mt-2"
-          >
-            🎯 Критический урон
-          </p>
+            <p>
+              Общий урон:
+              <strong>
+                {{
+                  Math.max(
+                    0,
+                    attackResult.damage.total +
+                      attack.damageModifier
+                  )
+                }}
+              </strong>
+            </p>
+
+            <p
+              v-if="attackResult.appliedDamage"
+              class="mt-2"
+            >
+              Получено урона:
+              <strong>
+                {{
+                  attackResult.appliedDamage.damage
+                }}
+              </strong>
+            </p>
+
+            <p
+              v-if="attackResult.appliedDamage"
+            >
+              HP цели:
+              <strong>
+                {{
+                  attackResult.appliedDamage.currentHP
+                }}
+                /
+                {{
+                  attackResult.appliedDamage.maxHP
+                }}
+              </strong>
+            </p>
+
+            <p
+              v-if="attackResult.appliedDamage?.defeated"
+              class="mt-2 font-semibold"
+            >
+              💀 Цель повержена
+            </p>
+          </div>
         </div>
       </div>
     </div>

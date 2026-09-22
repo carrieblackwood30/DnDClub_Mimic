@@ -16,27 +16,6 @@ export const useCharacterSkills = () => {
     skillChoices
   } = useCharacterClass()
 
-  const skillAbilities = {
-    acrobatics: 'dexterity',
-    animalHandling: 'wisdom',
-    arcana: 'intelligence',
-    athletics: 'strength',
-    deception: 'charisma',
-    history: 'intelligence',
-    insight: 'wisdom',
-    intimidation: 'charisma',
-    investigation: 'intelligence',
-    medicine: 'wisdom',
-    nature: 'intelligence',
-    perception: 'wisdom',
-    performance: 'charisma',
-    persuasion: 'charisma',
-    religion: 'intelligence',
-    sleightOfHand: 'dexterity',
-    stealth: 'dexterity',
-    survival: 'wisdom'
-  }
-
   const availableSkills = computed(() => {
     if (!skillChoices.value) {
       return []
@@ -77,14 +56,12 @@ export const useCharacterSkills = () => {
   }
 
   const getSkillModifier = (skill) => {
-    const ability = skillAbilities[skill.id]
-
-    if (!ability) {
+    if (!skill?.ability) {
       return 0
     }
 
     const baseModifier =
-      abilityModifiers.value[ability] ?? 0
+      abilityModifiers.value[skill.ability] ?? 0
 
     const isProficient =
       characterCreator.selectedSkills.includes(skill.id)
@@ -101,7 +78,10 @@ export const useCharacterSkills = () => {
   }
 
   const getSkillAbility = (skillId) => {
-    return skillAbilities[skillId] ?? null
+    return (
+      skills.find(skill => skill.id === skillId)?.ability ??
+      null
+    )
   }
 
   return {
@@ -109,10 +89,8 @@ export const useCharacterSkills = () => {
     maxSelectedSkills,
     selectedSkillsCount,
     canSelectMoreSkills,
-
     isSkillSelected,
     toggleSkill,
-
     getSkillModifier,
     hasSkillProficiency,
     getSkillAbility

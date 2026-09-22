@@ -1,10 +1,9 @@
 export const spellcastingProgression = {
   bard: {
     cantripsKnown: [
-      2, 2, 2, 2, 2,
-      3, 3, 3, 3, 3,
-      3, 3, 3, 3, 3,
-      4, 4, 4, 4, 4
+      2, 2, 2,
+      3, 3, 3, 3, 3, 3,
+      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4
     ],
     spellsKnown: [
       4, 5, 6, 7, 8,

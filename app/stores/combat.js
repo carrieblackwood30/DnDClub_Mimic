@@ -8,8 +8,12 @@ export const useCombatStore = defineStore('combat', () => {
       ...target,
       actionUsed: false,
       bonusActionUsed: false,
+      bonusActionSpellCast: false,
       reactionUsed: false,
-      reactionACBonus: 0
+      reactionACBonus: 0,
+      attackActionActive: false,
+      attackActionAttacksUsed: 0,
+      attackActionMaxAttacks: 1
     }))
   )
 
@@ -53,39 +57,87 @@ export const useCombatStore = defineStore('combat', () => {
   })
 
   const addParticipant = (participant) => {
-    const exists = participants.value.some(
+    const index = participants.value.findIndex(
       item => item.id === participant.id
     )
 
-    if (exists) {
-      return
+    if (index === -1) {
+      participants.value.push({
+        ...participant,
+        actionUsed: false,
+        bonusActionUsed: false,
+        bonusActionSpellCast: false,
+        reactionUsed: false,
+        reactionACBonus: 0,
+        attackActionActive: false,
+        attackActionAttacksUsed: 0,
+        attackActionMaxAttacks: 1
+      })
+
+      return participants.value[
+        participants.value.length - 1
+      ]
     }
 
-    participants.value.push({
+    const existing =
+      participants.value[index]
+
+    const preserveCombatState =
+      combatStarted.value
+
+    const updatedParticipant = {
+      ...existing,
       ...participant,
-      actionUsed: false,
-      bonusActionUsed: false,
-      reactionUsed: false,
-      reactionACBonus: 0
-    })
-  }
-
-  const addCharacter = (character) => {
-    if (!character) {
-      return
+      actionUsed: preserveCombatState
+        ? existing.actionUsed
+        : false,
+      bonusActionUsed: preserveCombatState
+        ? existing.bonusActionUsed
+        : false,
+      bonusActionSpellCast:
+        preserveCombatState
+          ? existing.bonusActionSpellCast
+          : false,
+      reactionUsed: preserveCombatState
+        ? existing.reactionUsed
+        : false,
+      reactionACBonus: preserveCombatState
+        ? existing.reactionACBonus
+        : 0,
+      attackActionActive:
+        preserveCombatState
+          ? existing.attackActionActive
+          : false,
+      attackActionAttacksUsed:
+        preserveCombatState
+          ? existing.attackActionAttacksUsed
+          : 0,
+      attackActionMaxAttacks:
+        preserveCombatState
+          ? existing.attackActionMaxAttacks
+          : 1,
+      currentHP: preserveCombatState
+        ? existing.currentHP
+        : participant.currentHP,
+      currentSpellSlots: preserveCombatState
+        ? [
+            ...(existing.currentSpellSlots ?? [])
+          ]
+        : [
+            ...(participant.currentSpellSlots ?? [])
+          ],
+      initiative: preserveCombatState
+        ? existing.initiative
+        : participant.initiative ?? 0,
+      initiativeRoll: preserveCombatState
+        ? existing.initiativeRoll
+        : undefined
     }
 
-    addParticipant({
-      id: `character-${character.id}`,
-      characterId: character.id,
-      name: character.name || 'Без имени',
-      type: 'player',
-      initiativeModifier: 0,
-      initiative: 0,
-      maxHP: 0,
-      currentHP: 0,
-      armorClass: 10
-    })
+    participants.value[index] =
+      updatedParticipant
+
+    return updatedParticipant
   }
 
   const selectTarget = (id) => {
@@ -148,10 +200,7 @@ export const useCombatStore = defineStore('combat', () => {
     }
 
     target.currentHP = target.maxHP
-    target.actionUsed = false
-    target.bonusActionUsed = false
-    target.reactionUsed = false
-    target.reactionACBonus = 0
+    resetTurnActions(target)
   }
 
   const resetTurnActions = (participant) => {
@@ -161,8 +210,12 @@ export const useCombatStore = defineStore('combat', () => {
 
     participant.actionUsed = false
     participant.bonusActionUsed = false
+    participant.bonusActionSpellCast = false
     participant.reactionUsed = false
     participant.reactionACBonus = 0
+    participant.attackActionActive = false
+    participant.attackActionAttacksUsed = 0
+    participant.attackActionMaxAttacks = 1
   }
 
   const useAction = (participantId) => {
@@ -191,6 +244,103 @@ export const useCombatStore = defineStore('combat', () => {
     }
 
     participant.actionUsed = true
+    participant.attackActionActive = false
+    participant.attackActionAttacksUsed = 0
+    participant.attackActionMaxAttacks = 1
+
+    return true
+  }
+
+  const canUseAttackActionAttack = (
+    participantId,
+    maxAttacks = 1
+  ) => {
+    const participant =
+      participants.value.find(
+        item => item.id === participantId
+      )
+
+    if (!participant) {
+      return false
+    }
+
+    if (currentTurn.value !== participantId) {
+      return false
+    }
+
+    if (participant.currentHP <= 0) {
+      return false
+    }
+
+    const normalizedMaxAttacks = Math.max(
+      1,
+      Number(maxAttacks) || 1
+    )
+
+    if (!participant.actionUsed) {
+      return true
+    }
+
+    if (!participant.attackActionActive) {
+      return false
+    }
+
+    return (
+      participant.attackActionAttacksUsed <
+      normalizedMaxAttacks
+    )
+  }
+
+  const useAttackActionAttack = (
+    participantId,
+    maxAttacks = 1
+  ) => {
+    const participant =
+      participants.value.find(
+        item => item.id === participantId
+      )
+
+    if (!participant) {
+      return false
+    }
+
+    if (currentTurn.value !== participantId) {
+      return false
+    }
+
+    if (participant.currentHP <= 0) {
+      return false
+    }
+
+    const normalizedMaxAttacks = Math.max(
+      1,
+      Number(maxAttacks) || 1
+    )
+
+    if (!participant.actionUsed) {
+      participant.actionUsed = true
+      participant.attackActionActive = true
+      participant.attackActionMaxAttacks =
+        normalizedMaxAttacks
+      participant.attackActionAttacksUsed = 1
+
+      return true
+    }
+
+    if (!participant.attackActionActive) {
+      return false
+    }
+
+    if (
+      participant.attackActionAttacksUsed >=
+      normalizedMaxAttacks
+    ) {
+      return false
+    }
+
+    participant.attackActionAttacksUsed += 1
+    participant.attackActionMaxAttacks =
+      normalizedMaxAttacks
 
     return true
   }
@@ -245,6 +395,36 @@ export const useCombatStore = defineStore('combat', () => {
     }
 
     participant.reactionUsed = true
+
+    return true
+  }
+
+  const markBonusActionSpellCast = (participantId) => {
+    const participant =
+      participants.value.find(
+        item =>
+          item.id === participantId
+      )
+
+    if (!participant) {
+      return false
+    }
+
+    if (!participant.bonusActionUsed) {
+      return false
+    }
+
+    if (
+      currentTurn.value !== participantId
+    ) {
+      return false
+    }
+
+    if (participant.currentHP <= 0) {
+      return false
+    }
+
+    participant.bonusActionSpellCast = true
 
     return true
   }
@@ -344,12 +524,6 @@ export const useCombatStore = defineStore('combat', () => {
       return
     }
 
-    const previousParticipant = currentParticipant.value
-
-    if (previousParticipant) {
-      previousParticipant.reactionACBonus = 0
-    }
-
     turnIndex.value = nextIndex
 
     resetTurnActions(
@@ -358,16 +532,11 @@ export const useCombatStore = defineStore('combat', () => {
   }
 
   const previousTurn = () => {
-    const previousIndex = findPreviousAliveIndex()
+    const previousIndex =
+      findPreviousAliveIndex()
 
     if (previousIndex === null) {
       return
-    }
-
-    const previousParticipant = currentParticipant.value
-
-    if (previousParticipant) {
-      previousParticipant.reactionACBonus = 0
     }
 
     turnIndex.value = previousIndex
@@ -377,89 +546,118 @@ export const useCombatStore = defineStore('combat', () => {
     )
   }
 
-const setPendingAttack = (attack) => {
-  pendingAttack.value = attack
-}
+  const setPendingAttack = (attack) => {
+    pendingAttack.value = attack
+  }
 
-const clearPendingAttack = () => {
-  pendingAttack.value = null
-}
+  const clearPendingAttack = () => {
+    pendingAttack.value = null
+  }
 
-const createPendingAttack = ({
-  attackerId,
-  targetId,
-  attackRoll,
-  attackModifier,
-  targetAC
-}) => {
-  const attacker = participants.value.find(
-    participant => participant.id === attackerId
-  )
-
-  const target = participants.value.find(
-    participant => participant.id === targetId
-  )
-
-  if (!attacker || !target) return false
-  if (target.currentHP <= 0) return false
-
-  pendingAttack.value = {
+  const createPendingAttack = ({
     attackerId,
     targetId,
     attackRoll,
     attackModifier,
-    targetAC
+    targetAC,
+    hit,
+    critical
+  }) => {
+    const attacker =
+      participants.value.find(
+        participant =>
+          participant.id === attackerId
+      )
+
+    const target =
+      participants.value.find(
+        participant =>
+          participant.id === targetId
+      )
+
+    if (!attacker || !target) {
+      return false
+    }
+
+    if (target.currentHP <= 0) {
+      return false
+    }
+
+    pendingAttack.value = {
+      attackerId,
+      targetId,
+      attackRoll,
+      attackModifier,
+      targetAC,
+      hit,
+      critical
+    }
+
+    return true
   }
 
-  return true
-}
+  const resolvePendingAttack = () => {
+    const attack = pendingAttack.value
 
-const resolvePendingAttack = () => {
-  const attack = pendingAttack.value
+    if (!attack) {
+      return null
+    }
 
-  if (!attack) return null
+    const target =
+      participants.value.find(
+        participant =>
+          participant.id === attack.targetId
+      )
 
-  const target = participants.value.find(
-    participant => participant.id === attack.targetId
-  )
+    if (!target) {
+      pendingAttack.value = null
+      return null
+    }
 
-  if (!target) {
     pendingAttack.value = null
-    return null
+
+    return {
+      ...attack,
+      targetCurrentHP: target.currentHP
+    }
   }
 
-  pendingAttack.value = null
+  const setReactionACBonus = (
+    participantId,
+    bonus
+  ) => {
+    const participant =
+      participants.value.find(
+        item => item.id === participantId
+      )
 
-  return {
-    ...attack,
-    targetCurrentHP: target.currentHP
+    if (!participant) {
+      return false
+    }
+
+    participant.reactionACBonus =
+      Number(bonus) || 0
+
+    return true
   }
-}
 
-const setReactionACBonus = (participantId, bonus) => {
-  const participant = participants.value.find(
-    item => item.id === participantId
-  )
+  const getEffectiveArmorClass = (
+    participantId
+  ) => {
+    const participant =
+      participants.value.find(
+        item => item.id === participantId
+      )
 
-  if (!participant) return false
+    if (!participant) {
+      return 0
+    }
 
-  participant.reactionACBonus = Number(bonus) || 0
-
-  return true
-}
-
-const getEffectiveArmorClass = (participantId) => {
-  const participant = participants.value.find(
-    item => item.id === participantId
-  )
-
-  if (!participant) return 0
-
-  return (
-    participant.armorClass +
-    (participant.reactionACBonus ?? 0)
-  )
-}
+    return (
+      participant.armorClass +
+      (participant.reactionACBonus ?? 0)
+    )
+  }
 
   const endCombat = () => {
     combatStarted.value = false
@@ -488,6 +686,57 @@ const getEffectiveArmorClass = (participantId) => {
     pendingAttack.value = null
   }
 
+  const canUseSpellSlot = (
+    participantId,
+    level
+  ) => {
+    if (level < 1) {
+      return false
+    }
+
+    const participant =
+      participants.value.find(
+        item => item.id === participantId
+      )
+
+    if (!participant) {
+      return false
+    }
+
+    return (
+      participant.currentSpellSlots?.[level - 1] ?? 0
+    ) > 0
+  }
+
+  const useSpellSlot = (
+    participantId,
+    level
+  ) => {
+    if (
+      !canUseSpellSlot(
+        participantId,
+        level
+      )
+    ) {
+      return false
+    }
+
+    const participant =
+      participants.value.find(
+        item => item.id === participantId
+      )
+
+    const index = level - 1
+
+    participant.currentSpellSlots[index] =
+      Math.max(
+        0,
+        participant.currentSpellSlots[index] - 1
+      )
+
+    return true
+  }
+
   return {
     participants,
     targets,
@@ -499,13 +748,17 @@ const getEffectiveArmorClass = (participantId) => {
     currentTurn,
     currentParticipant,
     addParticipant,
-    addCharacter,
     selectTarget,
     applyDamage,
     resetTarget,
     useAction,
+    canUseAttackActionAttack,
+    useAttackActionAttack,
     useBonusAction,
     useReaction,
+    markBonusActionSpellCast,
+    canUseSpellSlot,
+    useSpellSlot,
     setReactionACBonus,
     getEffectiveArmorClass,
     setTurnOrder,
@@ -518,6 +771,6 @@ const getEffectiveArmorClass = (participantId) => {
     setPendingAttack,
     clearPendingAttack,
     createPendingAttack,
-    resolvePendingAttack,
+    resolvePendingAttack
   }
 })

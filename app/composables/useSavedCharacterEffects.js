@@ -6,9 +6,6 @@ export const useSavedCharacterEffects = (
 ) => {
   const armorStore = useArmorsStore()
 
-  /*
-   * Проверка владения бронёй
-   */
   const armorPenalty = computed(() => {
     const armorId = character.value?.armorId
 
@@ -28,9 +25,6 @@ export const useSavedCharacterEffects = (
     return !armorProficiencies.includes(armor.type)
   })
 
-  /*
-   * Проверка владения щитом
-   */
   const shieldPenalty = computed(() => {
     const shieldId = character.value?.shieldId
 
@@ -44,9 +38,6 @@ export const useSavedCharacterEffects = (
     return !hasShieldProficiency
   })
 
-  /*
-   * Есть ли вообще проблемы с экипировкой
-   */
   const hasEquipmentPenalty = computed(() => {
     return (
       armorPenalty.value ||
@@ -54,10 +45,6 @@ export const useSavedCharacterEffects = (
     )
   })
 
-  /*
-   * Экипировка без владения
-   * мешает физическим проверкам.
-   */
   const strengthDisadvantage = computed(() => {
     return armorPenalty.value
   })
@@ -66,38 +53,19 @@ export const useSavedCharacterEffects = (
     return armorPenalty.value
   })
 
-  /*
-   * Атаки при проблемах с экипировкой
-   */
   const attackDisadvantage = computed(() => {
     return armorPenalty.value
   })
 
-  /*
-   * Пока оставляем существующую
-   * игровую логику блокировки.
-   */
   const spellcastingBlocked = computed(() => {
-    return (
-      armorPenalty.value ||
-      shieldPenalty.value
-    )
+    return armorPenalty.value
   })
 
-  /*
-   * Универсальное определение режима броска.
-   *
-   * Advantage + Disadvantage
-   * взаимно уничтожаются.
-   */
   const getRollMode = ({
     advantage = false,
     disadvantage = false
   } = {}) => {
-    if (
-      advantage &&
-      disadvantage
-    ) {
+    if (advantage && disadvantage) {
       return 'normal'
     }
 
@@ -112,9 +80,6 @@ export const useSavedCharacterEffects = (
     return 'normal'
   }
 
-  /*
-   * Режим проверки характеристики
-   */
   const getAbilityCheckMode = (
     ability,
     {
@@ -139,9 +104,6 @@ export const useSavedCharacterEffects = (
     })
   }
 
-  /*
-   * Режим атаки
-   */
   const getAttackMode = ({
     advantage = false
   } = {}) => {
@@ -152,13 +114,6 @@ export const useSavedCharacterEffects = (
     })
   }
 
-  /*
-   * Универсальный режим для спасброска.
-   *
-   * Пока здесь нет специальных эффектов,
-   * поэтому передаём advantage/disadvantage
-   * напрямую.
-   */
   const getSavingThrowMode = ({
     advantage = false,
     disadvantage = false
@@ -173,13 +128,10 @@ export const useSavedCharacterEffects = (
     armorPenalty,
     shieldPenalty,
     hasEquipmentPenalty,
-
     strengthDisadvantage,
     dexterityDisadvantage,
     attackDisadvantage,
-
     spellcastingBlocked,
-
     getRollMode,
     getAbilityCheckMode,
     getAttackMode,

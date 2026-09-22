@@ -453,7 +453,16 @@ export const classes = [
       type: 'known',
       ability: 'wisdom',
       slotProgression: 'half-caster',
-      startsAtLevel: 2
+      startsAtLevel: 2,
+      spellsKnown: [
+        0, 0, 0, 0,
+        2, 2, 3, 3, 4, 4,
+        5, 5, 6, 6, 7, 7,
+        8, 8, 9, 11
+      ],
+      cantripsKnown: {
+        progression: []
+      }
     },
 
     subclasses: [
@@ -567,7 +576,20 @@ export const classes = [
       type: 'known',
       ability: 'charisma',
       slotProgression: 'full-caster',
-      startsAtLevel: 1
+      startsAtLevel: 1,
+      spellsKnown: [
+        2, 3, 4, 5, 6,
+        7, 8, 9, 10, 11,
+        12, 13, 13, 13, 14,
+        14, 15, 15, 15, 15
+      ],
+      cantripsKnown: {
+        progression: [
+          { level: 1, count: 4 },
+          { level: 4, count: 5 },
+          { level: 10, count: 6 }
+        ]
+      }
     },
 
     subclasses: [

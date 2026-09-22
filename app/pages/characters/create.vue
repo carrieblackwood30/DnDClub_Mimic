@@ -2,8 +2,17 @@
 const characterCreator = useCharacterCreatorStore()
 const charactersStore = useCharactersStore()
 
+const { abilityScores } = useCharacterStats()
+const { initializeSpellSlots } = useCharacterSpellSlots()
+const { initializeSpellbook } = useCharacterSpellcasting()
+
 const createCharacter = () => {
-  const character = characterCreator.createCharacter()
+  initializeSpellSlots()
+  initializeSpellbook()
+
+  const character = characterCreator.createCharacter(
+    abilityScores.value
+  )
 
   character.id = crypto.randomUUID()
 
@@ -118,7 +127,7 @@ const createCharacter = () => {
     <div class="mt-10">
       <CharacterSavingThrows />
     </div>
-    
+
     <div class="mt-10">
       <CharacterSpellcasting />
     </div>
@@ -141,5 +150,4 @@ const createCharacter = () => {
       </button>
     </div>
   </div>
-  
 </template>
