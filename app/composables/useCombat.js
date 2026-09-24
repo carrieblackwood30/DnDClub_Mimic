@@ -1,4 +1,5 @@
 import { computed } from 'vue'
+import { storeToRefs } from 'pinia'
 
 import { useCombatStore } from '~/stores/combat'
 
@@ -8,45 +9,42 @@ import { reactions } from '~/data/reactions'
 
 export const useCombat = () => {
   const combatStore = useCombatStore()
+  const {
+    participants,
+    currentTurn,
+    currentParticipant,
+    combatStarted,
+    pendingOpportunityAttack
+  } = storeToRefs(combatStore)
 
   const { rollD20 } = useDice()
 
   const sortedTurnOrder = computed(() => {
-    return [...combatStore.participants].sort(
+    return [...participants.value].sort(
       (a, b) => b.initiative - a.initiative
     )
   })
 
-  const currentParticipant = computed(() => {
-    const currentId = combatStore.currentTurn
-
-    if (!currentId) {
-      return null
-    }
-
-    return combatStore.participants.find(
-      participant => participant.id === currentId
-    ) ?? null
-  })
-
-  const isCurrentParticipant = (id) => {
-    return currentParticipant.value?.id === id
+  const isCurrentParticipant = (
+    id
+  ) => {
+    return (
+      currentParticipant.value?.id === id
+    )
   }
 
-  const canParticipantAct = (id) => {
-    if (!combatStore.combatStarted) {
+  const canParticipantAct = (
+    participantId
+  ) => {
+    if (!combatStarted.value) {
       return false
     }
 
-    if (!currentParticipant.value) {
+    if (!currentTurn.value) {
       return false
     }
 
-    if (currentParticipant.value.currentHP <= 0) {
-      return false
-    }
-
-    return isCurrentParticipant(id)
+    return currentTurn.value === participantId
   }
 
   const canUseAction = (id) => {
@@ -54,11 +52,14 @@ export const useCombat = () => {
       return false
     }
 
-    const participant = combatStore.participants.find(
-      item => item.id === id
-    )
+    const participant =
+      combatStore.participants.find(
+        item => item.id === id
+      )
 
-    return participant ? !participant.actionUsed : false
+    return participant
+      ? !participant.actionUsed
+      : false
   }
 
   const canUseBonusAction = (id) => {
@@ -66,17 +67,21 @@ export const useCombat = () => {
       return false
     }
 
-    const participant = combatStore.participants.find(
-      item => item.id === id
-    )
+    const participant =
+      combatStore.participants.find(
+        item => item.id === id
+      )
 
-    return participant ? !participant.bonusActionUsed : false
+    return participant
+      ? !participant.bonusActionUsed
+      : false
   }
 
   const canUseReaction = (id) => {
-    const participant = combatStore.participants.find(
-      item => item.id === id
-    )
+    const participant =
+      combatStore.participants.find(
+        item => item.id === id
+      )
 
     if (!participant) {
       return false
@@ -111,10 +116,13 @@ export const useCombat = () => {
     }
 
     const dexterityScore =
-      character.abilityScores?.dexterity ?? 10
+      character.abilityScores?.dexterity ??
+      10
 
     const initiativeModifier =
-      Math.floor((dexterityScore - 10) / 2)
+      Math.floor(
+        (dexterityScore - 10) / 2
+      )
 
     combatStore.addParticipant({
       id: `character-${character.id}`,
@@ -122,10 +130,18 @@ export const useCombat = () => {
       name: character.name || 'Без имени',
       type: 'player',
       level: character.level ?? 1,
-      classId: character.classId,
+      classId: character.classId ?? null,
+      subclassId:
+        character.subclassId ?? null,
+      raceId:
+        character.raceId ?? null,
+      subraceId:
+        character.subraceId ?? null,
       abilityScores: {
         ...(character.abilityScores ?? {})
       },
+      weaponId: character.weaponId ?? null,
+      weaponAbility: character.weaponAbility ?? null,
       initiativeModifier,
       initiative: 0,
       maxHP: maxHitPoints,
@@ -156,25 +172,41 @@ export const useCombat = () => {
   }
 
   const rollInitiative = () => {
-    combatStore.participants.forEach(participant => {
-      const roll = rollD20()
+    combatStore.participants.forEach(
+      participant => {
+        const roll = rollD20()
 
-      participant.initiativeRoll = roll
+        participant.initiativeRoll = roll
 
-      participant.initiative =
-        roll + (participant.initiativeModifier ?? 0)
-    })
+        participant.initiative =
+          roll +
+          (
+            participant.initiativeModifier ??
+            0
+          )
+      }
+    )
   }
 
   const startCombat = () => {
     rollInitiative()
 
-    const order = [...combatStore.participants]
-      .filter(participant => participant.currentHP > 0)
-      .sort(
-        (a, b) => b.initiative - a.initiative
+    const order = [
+      ...combatStore.participants
+    ]
+      .filter(
+        participant =>
+          participant.currentHP > 0
       )
-      .map(participant => participant.id)
+      .sort(
+        (a, b) =>
+          b.initiative -
+          a.initiative
+      )
+      .map(
+        participant =>
+          participant.id
+      )
 
     combatStore.startCombat(order)
   }
@@ -191,16 +223,207 @@ export const useCombat = () => {
     combatStore.endCombat()
   }
 
-  const getEffectiveArmorClass = (participantId) => {
+  const resetCombat = () => {
+    combatStore.resetCombat()
+  }
+
+  const selectTarget = (
+    targetId
+  ) => {
+    combatStore.selectTarget(targetId)
+  }
+
+  const applyDamage = (
+    targetId,
+    damage
+  ) => {
+    return combatStore.applyDamage(
+      targetId,
+      damage
+    )
+  }
+
+  const getEffectiveArmorClass = (
+    participantId
+  ) => {
     return combatStore.getEffectiveArmorClass(
       participantId
     )
   }
 
-  const getReactionById = (id) => {
-    return reactions.find(
-      reaction => reaction.id === id
-    ) ?? null
+  const canUseAttackActionAttack = (
+    participantId
+  ) => {
+    return combatStore.canUseAttackActionAttack(
+      participantId
+    )
+  }
+
+  const useAttackActionAttack = (
+    participantId
+  ) => {
+    return combatStore.useAttackActionAttack(
+      participantId
+    )
+  }
+
+  const canUseActionSurge = (
+    participantId
+  ) => {
+    return combatStore.canUseActionSurge(
+      participantId
+    )
+  }
+
+  const useActionSurge = (
+    participantId
+  ) => {
+    return combatStore.useActionSurge(
+      participantId
+    )
+  }
+
+  const markBonusActionSpellCast = (
+    participantId
+  ) => {
+    return combatStore.markBonusActionSpellCast(
+      participantId
+    )
+  }
+
+  const canUseSpellSlot = (
+    participantId,
+    level
+  ) => {
+    return combatStore.canUseSpellSlot(
+      participantId,
+      level
+    )
+  }
+
+  const useSpellSlot = (
+    participantId,
+    level
+  ) => {
+    return combatStore.useSpellSlot(
+      participantId,
+      level
+    )
+  }
+
+  const setReactionACBonus = (
+    participantId,
+    bonus
+  ) => {
+    return combatStore.setReactionACBonus(
+      participantId,
+      bonus
+    )
+  }
+
+  const canMove = (
+    participantId,
+    distance
+  ) => {
+    return combatStore.canMove(
+      participantId,
+      distance
+    )
+  }
+
+  const moveParticipant = (
+    participantId,
+    distance
+  ) => {
+    return combatStore.moveParticipant(
+      participantId,
+      distance
+    )
+  }
+
+  const establishMeleeEngagement = (
+    attackerId,
+    targetId
+  ) => {
+    return combatStore.establishMeleeEngagement(
+      attackerId,
+      targetId
+    )
+  }
+
+  const clearMeleeEngagementsFor = (
+    participantId
+  ) => {
+    return combatStore.clearMeleeEngagementsFor(
+      participantId
+    )
+  }
+
+  const getEngagedHostiles = (
+    participantId
+  ) => {
+    return combatStore.getEngagedHostiles(
+      participantId
+    )
+  }
+
+  const getOpportunityAttackProfile = (
+    participantId
+  ) => {
+    return combatStore.getOpportunityAttackProfile(
+      participantId
+    )
+  }
+
+  const getOpportunityAttackers = (
+    participantId
+  ) => {
+    return combatStore.getOpportunityAttackers(
+      participantId
+    )
+  }
+
+  const useOpportunityAttackReaction = (
+    attackerId
+  ) => {
+    return combatStore.useOpportunityAttackReaction(
+      attackerId
+    )
+  }
+
+  const skipOpportunityAttack = (
+    attackerId
+  ) => {
+    return combatStore.skipOpportunityAttack(
+      attackerId
+    )
+  }
+
+  const finishOpportunityAttack = (
+    attackerId
+  ) => {
+    return combatStore.finishOpportunityAttack(
+      attackerId
+    )
+  }
+
+  const getRemainingMovement = (
+    participantId
+  ) => {
+    return combatStore.getRemainingMovement(
+      participantId
+    )
+  }
+
+  const getReactionById = (
+    id
+  ) => {
+    return (
+      reactions.find(
+        reaction =>
+          reaction.id === id
+      ) ?? null
+    )
   }
 
   const canUseReactionEffect = (
@@ -210,7 +433,8 @@ export const useCombat = () => {
   ) => {
     const participant =
       combatStore.participants.find(
-        item => item.id === participantId
+        item =>
+          item.id === participantId
       )
 
     if (!participant) {
@@ -234,7 +458,10 @@ export const useCombat = () => {
       }
     }
 
-    const reaction = getReactionById(reactionId)
+    const reaction =
+      getReactionById(
+        reactionId
+      )
 
     if (!reaction) {
       return {
@@ -254,7 +481,10 @@ export const useCombat = () => {
           reaction.spellId
         )
 
-      if (!hasKnownSpell && !hasPreparedSpell) {
+      if (
+        !hasKnownSpell &&
+        !hasPreparedSpell
+      ) {
         return {
           allowed: false,
           reason: 'spell-not-available'
@@ -288,7 +518,8 @@ export const useCombat = () => {
     if (
       reaction.trigger &&
       context.trigger &&
-      reaction.trigger !== context.trigger
+      reaction.trigger !==
+        context.trigger
     ) {
       return {
         allowed: false,
@@ -308,7 +539,8 @@ export const useCombat = () => {
     }
 
     if (
-      reaction.preventsCriticalHit === false &&
+      reaction.preventsCriticalHit ===
+        false &&
       context.attackResult?.critical
     ) {
       return {
@@ -329,7 +561,8 @@ export const useCombat = () => {
   ) => {
     const participant =
       combatStore.participants.find(
-        item => item.id === participantId
+        item =>
+          item.id === participantId
       )
 
     if (!participant) {
@@ -344,13 +577,15 @@ export const useCombat = () => {
       return []
     }
 
-    return reactions.filter(reaction => {
-      return canUseReactionEffect(
-        participantId,
-        reaction.id,
-        context
-      ).allowed
-    })
+    return reactions.filter(
+      reaction => {
+        return canUseReactionEffect(
+          participantId,
+          reaction.id,
+          context
+        ).allowed
+      }
+    )
   }
 
   const useReactionEffect = (
@@ -358,11 +593,12 @@ export const useCombat = () => {
     reactionId,
     context = {}
   ) => {
-    const check = canUseReactionEffect(
-      participantId,
-      reactionId,
-      context
-    )
+    const check =
+      canUseReactionEffect(
+        participantId,
+        reactionId,
+        context
+      )
 
     if (!check.allowed) {
       return {
@@ -371,9 +607,11 @@ export const useCombat = () => {
       }
     }
 
-    const reaction = check.reaction
+    const reaction =
+      check.reaction
 
-    const used = useReaction(participantId)
+    const used =
+      useReaction(participantId)
 
     if (!used) {
       return {
@@ -410,24 +648,101 @@ export const useCombat = () => {
     }
   }
 
+  const canDisengage = (participantId) => {
+    return combatStore.canDisengage(
+      participantId
+    )
+  }
+
+  const useDisengage = (participantId) => {
+    return combatStore.useDisengage(
+      participantId
+    )
+  }
+
+  const canDash = (
+    participantId
+    ) => {
+      return combatStore.canDash(
+        participantId
+      )
+    }
+
+    const useDash = (
+      participantId
+    ) => {
+      return combatStore.useDash(
+        participantId
+      )
+    }
+
   return {
+    combatStore,
+
     sortedTurnOrder,
     currentParticipant,
+    combatStarted,
+
     isCurrentParticipant,
     canParticipantAct,
+
     canUseAction,
     canUseBonusAction,
     canUseReaction,
+
     useAction,
     useBonusAction,
     useReaction,
+
     addCharacter,
+
     rollInitiative,
     startCombat,
     nextTurn,
     previousTurn,
     endCombat,
+    resetCombat,
+
+    selectTarget,
+    applyDamage,
+
     getEffectiveArmorClass,
+
+    canUseAttackActionAttack,
+    useAttackActionAttack,
+
+    canUseActionSurge,
+    useActionSurge,
+
+    markBonusActionSpellCast,
+
+    canUseSpellSlot,
+    useSpellSlot,
+
+    setReactionACBonus,
+
+    canMove,
+    moveParticipant,
+    getRemainingMovement,
+
+    establishMeleeEngagement,
+    clearMeleeEngagementsFor,
+    getEngagedHostiles,
+    getOpportunityAttackProfile,
+    getOpportunityAttackers,
+    useOpportunityAttackReaction,
+    skipOpportunityAttack,
+    finishOpportunityAttack,
+
+    canDisengage,
+    useDisengage,
+
+    canDash,
+    useDash,
+
+    currentTurn,
+    pendingOpportunityAttack,
+
     useReactionEffect,
     getAvailableReactions,
     canUseReactionEffect,

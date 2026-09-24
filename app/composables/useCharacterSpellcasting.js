@@ -319,6 +319,12 @@ export const useCharacterSpellcasting = () => {
     )
   })
 
+  const preparedCantrips = computed(() => {
+    return preparedSpells.value.filter(
+      spell => spell.level === 0
+    )
+  })
+
   const preparedLevelledSpells = computed(() => {
     return preparedSpells.value.filter(
       spell => spell.level > 0
@@ -651,6 +657,7 @@ const canCastSpell = (spell) => {
     knownSpells,
     spellbookSpells,
     preparedSpells,
+    preparedCantrips,
     preparedLevelledSpells,
     isCantripKnown,
     isSpellKnown,

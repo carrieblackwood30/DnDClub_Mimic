@@ -32,6 +32,9 @@ import CombatInitiative
 import CombatActions
   from '~/components/combat/CombatActions.vue'
 
+import CombatMovement
+  from '~/components/combat/CombatMovement.vue'
+
 import CombatSpellcasting
   from '~/components/combat/CombatSpellcasting.vue'
 
@@ -173,9 +176,17 @@ watch(
           <div class="mt-4 grid gap-4">
             <CombatInitiative />
 
-            <CombatActions />
+            <CombatActions
+              :character-id="character.id"
+            />
 
-            <CombatSpellcasting />
+            <CombatMovement
+              :character-id="character.id"
+            />
+
+            <CombatSpellcasting
+              :character-id="character.id"
+            />
 
             <CombatIncomingAttack />
           </div>

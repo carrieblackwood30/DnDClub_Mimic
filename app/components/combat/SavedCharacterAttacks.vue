@@ -50,8 +50,7 @@ const {
 const {
   canParticipantAct,
   currentParticipant,
-  getEffectiveArmorClass,
-  establishMeleeEngagement
+  getEffectiveArmorClass
 } = useCombat()
 
 const combatStore = useCombatStore()
@@ -192,13 +191,6 @@ const rollWeaponAttack = (mode = 'normal') => {
 
   if (startsNewAttackAction) {
     attacks.value = []
-  }
-
-  if (attack.value.weapon.type === 'melee') {
-    establishMeleeEngagement(
-      characterParticipantId.value,
-      target.id
-    )
   }
 
   const targetAC =

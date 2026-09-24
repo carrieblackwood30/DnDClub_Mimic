@@ -1,35 +1,104 @@
 <script setup>
 import { computed } from 'vue'
 
+const props = defineProps({
+  characterId: {
+    type: String,
+    required: true
+  }
+})
+
 const {
+  combatStore,
   currentParticipant,
   canUseAction,
   canUseBonusAction,
   canUseReaction,
+  canDash,
+  useDash,
+  canDisengage,
+  useDisengage,
   useReaction
 } = useCombat()
 
+const participant = computed(() => {
+  return combatStore.participants.find(
+    item => item.characterId === props.characterId
+  ) ?? null
+})
+
 const participantId = computed(() => {
-  return currentParticipant.value?.id ?? null
+  return participant.value?.id ?? null
+})
+
+const isCurrentTurn = computed(() => {
+  if (!participant.value) {
+    return false
+  }
+
+  return currentParticipant.value?.id === participant.value.id
 })
 
 const actionAvailable = computed(() => {
-  if (!participantId.value) return false
+  if (!participantId.value || !isCurrentTurn.value) {
+    return false
+  }
+
   return canUseAction(participantId.value)
 })
 
+const dashAvailable = computed(() => {
+  if (!participantId.value || !isCurrentTurn.value) {
+    return false
+  }
+
+  return canDash(participantId.value)
+})
+
+const disengageAvailable = computed(() => {
+  if (!participantId.value || !isCurrentTurn.value) {
+    return false
+  }
+
+  return canDisengage(participantId.value)
+})
+
 const bonusActionAvailable = computed(() => {
-  if (!participantId.value) return false
+  if (!participantId.value || !isCurrentTurn.value) {
+    return false
+  }
+
   return canUseBonusAction(participantId.value)
 })
 
 const reactionAvailable = computed(() => {
-  if (!participantId.value) return false
+  if (!participantId.value) {
+    return false
+  }
+
   return canUseReaction(participantId.value)
 })
 
+const activateDash = () => {
+  if (!participantId.value || !isCurrentTurn.value) {
+    return
+  }
+
+  useDash(participantId.value)
+}
+
+const activateDisengage = () => {
+  if (!participantId.value || !isCurrentTurn.value) {
+    return
+  }
+
+  useDisengage(participantId.value)
+}
+
 const activateReaction = () => {
-  if (!participantId.value) return
+  if (!participantId.value) {
+    return
+  }
 
   useReaction(participantId.value)
 }
@@ -37,12 +106,18 @@ const activateReaction = () => {
 
 <template>
   <div
-    v-if="currentParticipant"
+    v-if="participant"
     class="mt-4 border rounded-lg p-4"
   >
-    <h3 class="font-bold text-lg">
-      Ресурсы хода
-    </h3>
+    <div class="flex items-center justify-between">
+      <h3 class="font-bold text-lg">
+        Ресурсы хода
+      </h3>
+
+      <span class="text-sm text-gray-500">
+        {{ participant.name }}
+      </span>
+    </div>
 
     <div class="mt-3 grid grid-cols-3 gap-3">
       <div
@@ -58,7 +133,36 @@ const activateReaction = () => {
         </div>
 
         <div class="text-sm">
-          {{ actionAvailable ? 'Доступно' : 'Использовано' }}
+          {{
+            actionAvailable
+              ? 'Доступно'
+              : isCurrentTurn
+                ? 'Использовано'
+                : 'Не ваш ход'
+          }}
+        </div>
+
+        <div
+          v-if="isCurrentTurn && actionAvailable"
+          class="mt-2 flex flex-col gap-2"
+        >
+          <button
+            v-if="dashAvailable"
+            type="button"
+            class="border rounded px-3 py-1"
+            @click="activateDash"
+          >
+            Рывок (Dash)
+          </button>
+
+          <button
+            v-if="disengageAvailable"
+            type="button"
+            class="border rounded px-3 py-1"
+            @click="activateDisengage"
+          >
+            Отход (Disengage)
+          </button>
         </div>
       </div>
 
@@ -75,7 +179,13 @@ const activateReaction = () => {
         </div>
 
         <div class="text-sm">
-          {{ bonusActionAvailable ? 'Доступно' : 'Использовано' }}
+          {{
+            bonusActionAvailable
+              ? 'Доступно'
+              : isCurrentTurn
+                ? 'Использовано'
+                : 'Не ваш ход'
+          }}
         </div>
       </div>
 
@@ -92,7 +202,11 @@ const activateReaction = () => {
         </div>
 
         <div class="text-sm">
-          {{ reactionAvailable ? 'Доступно' : 'Использовано' }}
+          {{
+            reactionAvailable
+              ? 'Доступно'
+              : 'Использовано'
+          }}
         </div>
 
         <button
@@ -107,9 +221,10 @@ const activateReaction = () => {
     </div>
 
     <div class="mt-3 text-sm text-gray-500">
-      Ход:
+      Сейчас ход:
+
       <span class="font-semibold">
-        {{ currentParticipant.name }}
+        {{ currentParticipant?.name ?? '—' }}
       </span>
     </div>
   </div>

@@ -6,7 +6,8 @@ const combatStore = useCombatStore()
 const {
   getAvailableReactions,
   useReactionEffect,
-  getEffectiveArmorClass
+  getEffectiveArmorClass,
+  establishMeleeEngagement
 } = useCombat()
 
 const {
@@ -113,6 +114,11 @@ const rollIncomingAttack = () => {
     roll,
     modifier,
     targetAC
+  )
+
+  establishMeleeEngagement(
+    attacker.value.id,
+    target.value.id
   )
 
   attackResult.value = {
@@ -301,7 +307,7 @@ const resetAttack = () => {
             :value="participant.id"
           >
             {{ participant.name }}
-            — AC {{ participant.armorClass }}
+            — AC {{ getEffectiveArmorClass(participant.id) }}
             — HP {{ participant.currentHP }}/{{ participant.maxHP }}
           </option>
         </select>
@@ -344,8 +350,13 @@ const resetAttack = () => {
         </p>
 
         <p>
-          AC цели:
+          AC при атаке:
           <strong>{{ attackResult.targetAC }}</strong>
+        </p>
+
+        <p>
+          Текущий AC:
+          <strong>{{ effectiveTargetAC }}</strong>
         </p>
       </div>
 

@@ -4,6 +4,13 @@ import { useCombatStore } from '~/stores/combat'
 import { useCombat } from '~/composables/useCombat'
 import { useCombatSpellcasting } from '~/composables/useCombatSpellcasting'
 
+const props = defineProps({
+  characterId: {
+    type: String,
+    required: true
+  }
+})
+
 const combatStore = useCombatStore()
 
 const {
@@ -29,12 +36,32 @@ const resultMessage = ref('')
 const attackResult = ref(null)
 const isResolving = ref(false)
 
+const participant = computed(() => {
+  return combatStore.participants.find(
+    item =>
+      item.characterId === props.characterId
+  ) ?? null
+})
+
 const participantId = computed(() => {
-  return currentParticipant.value?.id ?? null
+  return participant.value?.id ?? null
+})
+
+const isCurrentTurn = computed(() => {
+  if (!participant.value) {
+    return false
+  }
+
+  return (
+    currentParticipant.value?.id ===
+    participant.value.id
+  )
 })
 
 const cantrips = computed(() => {
-  if (!participantId.value) return []
+  if (!participantId.value) {
+    return []
+  }
 
   return getAvailableCantrips(
     participantId.value
@@ -42,7 +69,9 @@ const cantrips = computed(() => {
 })
 
 const levelledSpells = computed(() => {
-  if (!participantId.value) return []
+  if (!participantId.value) {
+    return []
+  }
 
   return getAvailableLevelledSpells(
     participantId.value
@@ -50,12 +79,14 @@ const levelledSpells = computed(() => {
 })
 
 const targets = computed(() => {
-  if (!participantId.value) return []
+  if (!participantId.value) {
+    return []
+  }
 
   return combatStore.participants.filter(
-    participant =>
-      participant.id !== participantId.value &&
-      participant.currentHP > 0
+    item =>
+      item.id !== participantId.value &&
+      item.currentHP > 0
   )
 })
 
@@ -75,6 +106,10 @@ const groupedSpells = computed(() => {
 
 const availableSlotLevels = computed(() => {
   const result = []
+
+  if (!participantId.value) {
+    return result
+  }
 
   for (let level = 1; level <= 9; level += 1) {
     const current = getCurrentSpellSlotCount(
@@ -100,7 +135,9 @@ const availableSlotLevels = computed(() => {
 })
 
 const isSpellAvailable = (spell) => {
-  if (!participantId.value) return false
+  if (!participantId.value) {
+    return false
+  }
 
   return canCastSpell(
     participantId.value,
@@ -151,9 +188,10 @@ const resolveSelectedSpell = () => {
   )
 
   if (!castResult.success) {
-    resultMessage.value = getCastErrorMessage(
-      castResult.reason
-    )
+    resultMessage.value =
+      getCastErrorMessage(
+        castResult.reason
+      )
 
     isResolving.value = false
 
@@ -170,9 +208,10 @@ const resolveSelectedSpell = () => {
   )
 
   if (!resolution.success) {
-    resultMessage.value = getResolutionErrorMessage(
-      resolution.reason
-    )
+    resultMessage.value =
+      getResolutionErrorMessage(
+        resolution.reason
+      )
 
     isResolving.value = false
 
@@ -185,9 +224,10 @@ const resolveSelectedSpell = () => {
     resolution
   )
 
-  resultMessage.value = getResolutionMessage(
-    resolution
-  )
+  resultMessage.value =
+    getResolutionMessage(
+      resolution
+    )
 
   selectedSpell.value = null
   selectedTargetId.value = null
@@ -195,7 +235,9 @@ const resolveSelectedSpell = () => {
 }
 
 const useSpell = (spell) => {
-  if (!participantId.value) return
+  if (!participantId.value) {
+    return
+  }
 
   const result = castSpell(
     participantId.value,
@@ -203,9 +245,10 @@ const useSpell = (spell) => {
   )
 
   if (!result.success) {
-    resultMessage.value = getCastErrorMessage(
-      result.reason
-    )
+    resultMessage.value =
+      getCastErrorMessage(
+        result.reason
+      )
 
     return
   }
@@ -216,14 +259,28 @@ const useSpell = (spell) => {
     return
   }
 
-  resultMessage.value = `${spell.name}: заклинание использовано`
+  resultMessage.value =
+    `${spell.name}: заклинание использовано`
 }
 
-const applyResolutionDamage = (resolution) => {
-  if (!resolution?.damage) return
-  if (!resolution.damage.success) return
-  if (resolution.damage.total <= 0) return
-  if (!resolution.targetId) return
+const applyResolutionDamage = (
+  resolution
+) => {
+  if (!resolution?.damage) {
+    return
+  }
+
+  if (!resolution.damage.success) {
+    return
+  }
+
+  if (resolution.damage.total <= 0) {
+    return
+  }
+
+  if (!resolution.targetId) {
+    return
+  }
 
   combatStore.applyDamage(
     resolution.targetId,
@@ -231,20 +288,32 @@ const applyResolutionDamage = (resolution) => {
   )
 }
 
-const getResolutionMessage = (resolution) => {
+const getResolutionMessage = (
+  resolution
+) => {
   if (resolution.type === 'attack') {
-    const target = combatStore.participants.find(
-      participant => participant.id === resolution.targetId
-    )
+    const target =
+      combatStore.participants.find(
+        item =>
+          item.id === resolution.targetId
+      )
 
-    const targetName = target?.name ?? 'цель'
-    const roll = resolution.roll
-    const damageRolls = resolution.damage?.rolls ?? []
-    const damageDice = resolution.damage?.dice ?? ''
+    const targetName =
+      target?.name ?? 'цель'
 
-    const damageText = damageRolls.length
-      ? ` (${damageDice}: ${damageRolls.join(' + ')})`
-      : ''
+    const roll =
+      resolution.roll
+
+    const damageRolls =
+      resolution.damage?.rolls ?? []
+
+    const damageDice =
+      resolution.damage?.dice ?? ''
+
+    const damageText =
+      damageRolls.length
+        ? ` (${damageDice}: ${damageRolls.join(' + ')})`
+        : ''
 
     if (resolution.critical) {
       return `${resolution.spell.name}: d20 = ${roll}. КРИТ! Попадание по ${targetName}. Урон: ${resolution.damage.total} ${resolution.damage.type}${damageText}`
@@ -261,12 +330,17 @@ const getResolutionMessage = (resolution) => {
     return `${resolution.spell.name}: d20 = ${roll}. Попадание по ${targetName}. Урон: ${resolution.damage.total} ${resolution.damage.type}${damageText}`
   }
 
-  if (resolution.type === 'saving-throw') {
-    const target = combatStore.participants.find(
-      participant => participant.id === resolution.targetId
-    )
+  if (
+    resolution.type === 'saving-throw'
+  ) {
+    const target =
+      combatStore.participants.find(
+        item =>
+          item.id === resolution.targetId
+      )
 
-    const targetName = target?.name ?? 'цель'
+    const targetName =
+      target?.name ?? 'цель'
 
     if (resolution.passed) {
       return `${resolution.spell.name}: ${targetName} успешно прошёл спасбросок. Урон: ${resolution.damage?.total ?? 0} ${resolution.damage?.type ?? ''}`
@@ -275,12 +349,17 @@ const getResolutionMessage = (resolution) => {
     return `${resolution.spell.name}: ${targetName} провалил спасбросок. Урон: ${resolution.damage?.total ?? 0} ${resolution.damage?.type ?? ''}`
   }
 
-  if (resolution.type === 'automatic-hit') {
-    const target = combatStore.participants.find(
-      participant => participant.id === resolution.targetId
-    )
+  if (
+    resolution.type === 'automatic-hit'
+  ) {
+    const target =
+      combatStore.participants.find(
+        item =>
+          item.id === resolution.targetId
+      )
 
-    const targetName = target?.name ?? 'цель'
+    const targetName =
+      target?.name ?? 'цель'
 
     return `${resolution.spell.name}: автоматическое попадание по ${targetName}. Урон: ${resolution.damage.total} ${resolution.damage.type}`
   }
@@ -288,23 +367,29 @@ const getResolutionMessage = (resolution) => {
   return `${resolution.spell.name}: заклинание использовано`
 }
 
-const getCastErrorMessage = (reason) => {
+const getCastErrorMessage = (
+  reason
+) => {
   if (reason === 'spell-unavailable') {
     return 'Заклинание сейчас недоступно.'
   }
 
   if (reason === 'spell-slot-unavailable') {
-    return 'Нет доступного ячейки заклинания.'
+    return 'Нет доступной ячейки заклинания.'
   }
 
-  if (reason === 'casting-time-unavailable') {
+  if (
+    reason === 'casting-time-unavailable'
+  ) {
     return 'Недоступно действие для накладывания заклинания.'
   }
 
   return 'Не удалось использовать заклинание.'
 }
 
-const getResolutionErrorMessage = (reason) => {
+const getResolutionErrorMessage = (
+  reason
+) => {
   if (reason === 'invalid-target') {
     return 'Недопустимая цель.'
   }
@@ -313,7 +398,9 @@ const getResolutionErrorMessage = (reason) => {
     return 'Цель находится без сознания.'
   }
 
-  if (reason === 'missing-saving-throw-ability') {
+  if (
+    reason === 'missing-saving-throw-ability'
+  ) {
     return 'У заклинания не указан тип спасброска.'
   }
 
@@ -321,29 +408,53 @@ const getResolutionErrorMessage = (reason) => {
 }
 
 const getSpellStatus = (spell) => {
-  if (!participantId.value) return ''
+  if (!participantId.value) {
+    return ''
+  }
 
   if (!isSpellAvailable(spell)) {
     if (spell.level > 0) {
       return 'Нет доступной ячейки'
     }
 
+    if (!isCurrentTurn.value) {
+      return 'Не ваш ход'
+    }
+
     return 'Недоступно'
   }
 
-  if (spell.resolution?.type === 'attack') {
+  if (!isCurrentTurn.value) {
+    if (
+      spell.resolution?.type === 'reaction'
+    ) {
+      return 'Реакция'
+    }
+
+    return 'Не ваш ход'
+  }
+
+  if (
+    spell.resolution?.type === 'attack'
+  ) {
     return 'Требуется атака'
   }
 
-  if (spell.resolution?.type === 'saving-throw') {
+  if (
+    spell.resolution?.type === 'saving-throw'
+  ) {
     return 'Спасбросок'
   }
 
-  if (spell.resolution?.type === 'automatic-hit') {
+  if (
+    spell.resolution?.type === 'automatic-hit'
+  ) {
     return 'Автоматическое попадание'
   }
 
-  if (spell.resolution?.type === 'reaction') {
+  if (
+    spell.resolution?.type === 'reaction'
+  ) {
     return 'Реакция'
   }
 
@@ -351,7 +462,9 @@ const getSpellStatus = (spell) => {
 }
 
 const getAttackModifier = (spell) => {
-  if (spell.resolution?.type !== 'attack') {
+  if (
+    spell.resolution?.type !== 'attack'
+  ) {
     return null
   }
 
@@ -361,7 +474,9 @@ const getAttackModifier = (spell) => {
 }
 
 const getSaveDC = (spell) => {
-  if (spell.resolution?.type !== 'saving-throw') {
+  if (
+    spell.resolution?.type !== 'saving-throw'
+  ) {
     return null
   }
 
@@ -371,7 +486,9 @@ const getSaveDC = (spell) => {
 }
 
 const getTargetAC = () => {
-  if (!selectedTargetId.value) return null
+  if (!selectedTargetId.value) {
+    return null
+  }
 
   return getEffectiveArmorClass(
     selectedTargetId.value
@@ -382,9 +499,35 @@ const getTargetAC = () => {
 <template>
   <section class="space-y-4">
     <div>
-      <h2 class="text-xl font-bold">
-        Заклинания
-      </h2>
+      <div class="flex items-center justify-between">
+        <h2 class="text-xl font-bold">
+          Заклинания
+        </h2>
+
+        <span
+          v-if="participant"
+          class="text-sm opacity-70"
+        >
+          {{ participant.name }}
+        </span>
+      </div>
+
+      <p
+        v-if="!participant"
+        class="mt-2 rounded border p-3"
+      >
+        Персонаж ещё не добавлен в бой.
+      </p>
+
+      <p
+        v-else-if="!isCurrentTurn"
+        class="mt-2 rounded border p-3 text-sm"
+      >
+        Сейчас ход:
+        {{ currentParticipant?.name ?? '—' }}.
+        Заклинания вашего хода будут доступны,
+        когда наступит ваш ход.
+      </p>
 
       <p
         v-if="resultMessage"
@@ -409,7 +552,9 @@ const getTargetAC = () => {
       </div>
 
       <div
-        v-if="selectedSpell.resolution?.type === 'attack'"
+        v-if="
+          selectedSpell.resolution?.type === 'attack'
+        "
         class="space-y-2"
       >
         <p>
@@ -428,7 +573,9 @@ const getTargetAC = () => {
       </div>
 
       <div
-        v-if="selectedSpell.resolution?.type === 'saving-throw'"
+        v-if="
+          selectedSpell.resolution?.type === 'saving-throw'
+        "
         class="space-y-2"
       >
         <p>
@@ -509,6 +656,13 @@ const getTargetAC = () => {
       <h3 class="font-semibold">
         Заговоры
       </h3>
+
+      <div
+        v-if="!cantrips.length"
+        class="rounded border p-3 text-sm opacity-70"
+      >
+        Нет доступных заговоров.
+      </div>
 
       <div
         v-for="spell in cantrips"

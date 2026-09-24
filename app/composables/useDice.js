@@ -1,8 +1,142 @@
 export const useDice = () => {
-  const rollD20 = () => {
+  const normalizeMode = (mode) => {
+    if (mode === 'advantage') {
+      return 'advantage'
+    }
+
+    if (mode === 'disadvantage') {
+      return 'disadvantage'
+    }
+
+    return 'normal'
+  }
+
+  const rollDie = (sides) => {
+    const normalizedSides = Number(sides)
+
+    if (
+      !Number.isInteger(normalizedSides) ||
+      normalizedSides <= 0
+    ) {
+      return null
+    }
+
     return Math.floor(
-      Math.random() * 20
+      Math.random() * normalizedSides
     ) + 1
+  }
+
+  const rollDice = (
+    count,
+    sides
+  ) => {
+    const normalizedCount = Number(count)
+    const normalizedSides = Number(sides)
+
+    if (
+      !Number.isInteger(normalizedCount) ||
+      normalizedCount <= 0 ||
+      !Number.isInteger(normalizedSides) ||
+      normalizedSides <= 0
+    ) {
+      return null
+    }
+
+    const rolls = []
+
+    for (
+      let i = 0;
+      i < normalizedCount;
+      i++
+    ) {
+      rolls.push(
+        rollDie(normalizedSides)
+      )
+    }
+
+    const total = rolls.reduce(
+      (sum, roll) =>
+        sum + roll,
+      0
+    )
+
+    return {
+      rolls,
+      total,
+      count: normalizedCount,
+      sides: normalizedSides
+    }
+  }
+
+  const rollD20 = () => {
+    return rollDie(20)
+  }
+
+  const rollD20ByMode = (
+    mode = 'normal'
+  ) => {
+    const normalizedMode =
+      normalizeMode(mode)
+
+    if (
+      normalizedMode ===
+      'advantage'
+    ) {
+      const first = rollD20()
+      const second = rollD20()
+
+      return {
+        rolls: [
+          first,
+          second
+        ],
+        roll: Math.max(
+          first,
+          second
+        ),
+        mode: normalizedMode
+      }
+    }
+
+    if (
+      normalizedMode ===
+      'disadvantage'
+    ) {
+      const first = rollD20()
+      const second = rollD20()
+
+      return {
+        rolls: [
+          first,
+          second
+        ],
+        roll: Math.min(
+          first,
+          second
+        ),
+        mode: normalizedMode
+      }
+    }
+
+    const roll = rollD20()
+
+    return {
+      rolls: [roll],
+      roll,
+      mode: normalizedMode
+    }
+  }
+
+  const rollD20WithAdvantage = () => {
+    return rollD20ByMode(
+      'advantage'
+    )
+  }
+
+  const rollD20WithDisadvantage = () => {
+    return rollD20ByMode(
+      'disadvantage'
+    )
   }
 
   const getRollType = (roll) => {
@@ -17,112 +151,33 @@ export const useDice = () => {
     return 'normal'
   }
 
-  const rollD20WithAdvantage = () => {
-    const first = rollD20()
-    const second = rollD20()
-
-    const result = Math.max(
-      first,
-      second
-    )
-
-    return {
-      rolls: [first, second],
-      result
-    }
-  }
-
-  const rollD20WithDisadvantage = () => {
-    const first = rollD20()
-    const second = rollD20()
-
-    const result = Math.min(
-      first,
-      second
-    )
-
-    return {
-      rolls: [first, second],
-      result
-    }
-  }
-
   const rollCheck = (
     modifier = 0,
     mode = 'normal'
   ) => {
-    let roll
-    let rolls
-
-    if (mode === 'advantage') {
-      const result =
-        rollD20WithAdvantage()
-
-      rolls = result.rolls
-      roll = result.result
-    } else if (
-      mode === 'disadvantage'
-    ) {
-      const result =
-        rollD20WithDisadvantage()
-
-      rolls = result.rolls
-      roll = result.result
-    } else {
-      roll = rollD20()
-      rolls = [roll]
-    }
+    const result =
+      rollD20ByMode(mode)
 
     const rollType =
-      getRollType(roll)
+      getRollType(result.roll)
 
     return {
-      rolls,
-      roll,
+      rolls: result.rolls,
+      roll: result.roll,
       modifier,
-      total: roll + modifier,
-      mode,
+      total:
+        result.roll +
+        modifier,
+      mode: result.mode,
       rollType,
+      natural20:
+        result.roll === 20,
+      natural1:
+        result.roll === 1,
       isCritical:
-        rollType === 'critical',
+        result.roll === 20,
       isCriticalFail:
-        rollType === 'critical-fail'
-    }
-  }
-
-  const rollDie = (sides) => {
-    return Math.floor(
-      Math.random() * sides
-    ) + 1
-  }
-
-  const rollDice = (
-    count,
-    sides
-  ) => {
-    const rolls = []
-
-    for (
-      let i = 0;
-      i < count;
-      i++
-    ) {
-      rolls.push(
-        rollDie(sides)
-      )
-    }
-
-    const total = rolls.reduce(
-      (sum, roll) =>
-        sum + roll,
-      0
-    )
-
-    return {
-      rolls,
-      total,
-      count,
-      sides
+        result.roll === 1
     }
   }
 
@@ -136,7 +191,9 @@ export const useDice = () => {
     const match = dice
       .trim()
       .toLowerCase()
-      .match(/^(\d+)d(\d+)$/)
+      .match(
+        /^(\d+)d(\d+)$/
+      )
 
     if (!match) {
       return null
@@ -180,9 +237,12 @@ export const useDice = () => {
       return null
     }
 
-    const value = damage.trim()
+    const value =
+      damage.trim()
 
-    if (!/^\d+$/.test(value)) {
+    if (
+      !/^\d+$/.test(value)
+    ) {
       return null
     }
 
@@ -201,7 +261,9 @@ export const useDice = () => {
     const fixedDamage =
       parseFixedDamage(dice)
 
-    if (fixedDamage !== null) {
+    if (
+      fixedDamage !== null
+    ) {
       return {
         rolls: [],
         total: fixedDamage,
@@ -241,6 +303,7 @@ export const useDice = () => {
 
   return {
     rollD20,
+    rollD20ByMode,
     rollD20WithAdvantage,
     rollD20WithDisadvantage,
     getRollType,

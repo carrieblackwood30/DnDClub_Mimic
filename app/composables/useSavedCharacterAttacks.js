@@ -1,7 +1,11 @@
 import { computed } from 'vue'
 
 import { useDice } from '~/composables/useDice'
+
+import { useSavedCharacterEffects } from '~/composables/useSavedCharacterEffects'
+
 import { useAttackProgression } from '~/composables/useAttackProgression'
+
 
 export const useSavedCharacterAttacks = (
   character,
@@ -24,6 +28,25 @@ export const useSavedCharacterAttacks = (
     getAttackCount
   } = useAttackProgression()
 
+  const attackCount = computed(() => {
+    if (!character.value) {
+      return 1
+    }
+
+    return getAttackCount({
+      classId:
+        character.value.classId,
+      level:
+        character.value.level,
+      subclassId:
+        character.value.subclassId,
+      pactBoon:
+        character.value.pactBoon ?? null,
+      invocationIds:
+        character.value.invocationIds ?? []
+    })
+  })
+
   const attack = computed(() => {
     if (!character.value) {
       return null
@@ -40,7 +63,9 @@ export const useSavedCharacterAttacks = (
     const abilityScores =
       character.value.abilityScores ?? {}
 
-    const getModifier = (ability) => {
+    const getModifier = (
+      ability
+    ) => {
       const score =
         abilityScores[ability] ?? 10
 
@@ -50,7 +75,8 @@ export const useSavedCharacterAttacks = (
     }
 
     if (!weapon.value) {
-      const ability = 'strength'
+      const ability =
+        'strength'
 
       const abilityModifier =
         getModifier(ability)
@@ -76,6 +102,8 @@ export const useSavedCharacterAttacks = (
         isFinesse: false,
         isRanged: false,
         isThrown: false,
+        attackCount:
+          attackCount.value,
         isUnarmed: true
       }
     }
@@ -98,6 +126,15 @@ export const useSavedCharacterAttacks = (
         'finesse'
       ) ?? false
 
+    const isRanged =
+      weapon.value.type ===
+      'ranged'
+
+    const isThrown =
+      weapon.value.properties?.includes(
+        'thrown'
+      ) ?? false
+
     let ability =
       weapon.value.ability
 
@@ -106,10 +143,13 @@ export const useSavedCharacterAttacks = (
         character.value.weaponAbility
 
       if (
-        selectedAbility === 'strength' ||
-        selectedAbility === 'dexterity'
+        selectedAbility ===
+          'strength' ||
+        selectedAbility ===
+          'dexterity'
       ) {
-        ability = selectedAbility
+        ability =
+          selectedAbility
       }
     }
 
@@ -135,33 +175,12 @@ export const useSavedCharacterAttacks = (
       damageModifier,
       hasProficiency,
       isFinesse,
-      isRanged:
-        weapon.value.type === 'ranged',
-      isThrown:
-        weapon.value.properties?.includes(
-          'thrown'
-        ) ?? false,
+      isRanged,
+      isThrown,
+      attackCount:
+        attackCount.value,
       isUnarmed: false
     }
-  })
-
-  const attackCount = computed(() => {
-    if (!character.value) {
-      return 1
-    }
-
-    return getAttackCount({
-      classId:
-        character.value.classId,
-      level:
-        character.value.level,
-      subclassId:
-        character.value.subclassId ?? null,
-      pactBoon:
-        character.value.pactBoon ?? null,
-      invocationIds:
-        character.value.invocationIds ?? []
-    })
   })
 
   const rollAttack = (
@@ -182,9 +201,11 @@ export const useSavedCharacterAttacks = (
     const finalMode =
       getAttackMode({
         advantage:
-          requestedMode === 'advantage',
+          requestedMode ===
+          'advantage',
         disadvantage:
-          requestedMode === 'disadvantage'
+          requestedMode ===
+          'disadvantage'
       })
 
     return rollCheck(
