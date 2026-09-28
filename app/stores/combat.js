@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { combatTargets } from '~/data/combatTargets'
 import { races } from '~/data/races'
+import { createCharacterParticipant, getParticipantAttackProfile } from '~/domain/combat/participantFactory'
+import { resolveRollMode, rollD20ByMode, rollWeaponDamage, getCoverACBonus } from '~/domain/combat/attackEngine'
 
 export const useCombatStore = defineStore('combat', () => {
   const getActionSurgeUses = (participant) => {
@@ -53,6 +55,26 @@ export const useCombatStore = defineStore('combat', () => {
     return 30
   }
 
+  const getInitiativeModifier = participant => {
+    if (participant?.initiativeModifier != null) {
+      return Number(participant.initiativeModifier) || 0
+    }
+
+    if (participant?.dexterity != null) {
+      return Math.floor((Number(participant.dexterity) - 10) / 2)
+    }
+
+    return 0
+  }
+
+  const rollInitiative = participant => {
+    const roll = Math.floor(Math.random() * 20) + 1
+    const modifier = getInitiativeModifier(participant)
+    participant.initiativeRoll = roll
+    participant.initiative = roll + modifier
+    return participant.initiative
+  }
+
   const createParticipantState = (
     participant
   ) => {
@@ -64,6 +86,14 @@ export const useCombatStore = defineStore('combat', () => {
 
     return {
       ...participant,
+
+      faction: participant.faction ?? (
+        participant.type === 'player'
+          ? 'friendly'
+          : participant.type === 'enemy' || participant.type === 'monster'
+            ? 'hostile'
+            : 'neutral'
+      ),
 
       actionUsed: false,
 
@@ -78,6 +108,21 @@ export const useCombatStore = defineStore('combat', () => {
       attackActionMaxAttacks:
         participant.attackActionMaxAttacks ?? 1,
 
+      weaponAttackProfile:
+        participant.weaponAttackProfile ?? null,
+
+      weaponId:
+        participant.weaponId ?? null,
+
+      weaponAbility:
+        participant.weaponAbility ?? null,
+
+      armorId:
+        participant.armorId ?? null,
+
+      shieldId:
+        participant.shieldId ?? null,
+
       actionType: null,
       disengageActive: false,
 
@@ -91,6 +136,12 @@ export const useCombatStore = defineStore('combat', () => {
 
       speed,
 
+      initiativeModifier: getInitiativeModifier(participant),
+
+      attackBonus: Number(participant.attackBonus ?? participant.attackModifier ?? 5),
+      damageDice: participant.damageDice ?? participant.damage ?? '1d6',
+      damageBonus: Number(participant.damageBonus ?? participant.damageModifier ?? 2),
+
       movementUsed:
         participant.movementUsed ?? 0,
 
@@ -98,6 +149,8 @@ export const useCombatStore = defineStore('combat', () => {
         participant.remainingMovement ?? speed
     }
   }
+
+  const pendingOpportunityAttacks = ref([])
 
   const participants = ref(
     combatTargets.map(target =>
@@ -114,6 +167,10 @@ export const useCombatStore = defineStore('combat', () => {
   const turnIndex = ref(0)
 
   const turnOrder = ref([])
+
+  // D&D 5e 2014: flanking is an optional DMG rule, not a core PHB rule.
+  const flankingEnabled = ref(false)
+  const roundNumber = ref(1)
 
   const targets = computed(() => {
     return participants.value.filter(
@@ -174,6 +231,13 @@ export const useCombatStore = defineStore('combat', () => {
       participants.value.push(
         newParticipant
       )
+
+      if (combatStarted.value && newParticipant.currentHP > 0) {
+        rollInitiative(newParticipant)
+        if (!turnOrder.value.includes(newParticipant.id)) {
+          turnOrder.value.push(newParticipant.id)
+        }
+      }
 
       return newParticipant
     }
@@ -262,6 +326,11 @@ export const useCombatStore = defineStore('combat', () => {
 
       speed,
 
+      initiativeModifier: getInitiativeModifier(participant),
+      attackBonus: Number(participant.attackBonus ?? participant.attackModifier ?? existing.attackBonus ?? existing.attackModifier ?? 5),
+      damageDice: participant.damageDice ?? participant.damage ?? existing.damageDice ?? existing.damage ?? '1d6',
+      damageBonus: Number(participant.damageBonus ?? participant.damageModifier ?? existing.damageBonus ?? existing.damageModifier ?? 2),
+
       movementUsed:
         preserveCombatState
           ? existing.movementUsed
@@ -306,61 +375,13 @@ export const useCombatStore = defineStore('combat', () => {
   }
 
   const addCharacter = (character) => {
-    if (!character) {
-      return
+    const participant = createCharacterParticipant(character)
+
+    if (!participant) {
+      return null
     }
 
-    addParticipant({
-      id: `character-${character.id}`,
-
-      characterId: character.id,
-
-      name:
-        character.name ||
-        'Без имени',
-
-      type: 'player',
-
-      classId:
-        character.classId ?? null,
-
-      subclassId:
-        character.subclassId ?? null,
-
-      level:
-        character.level ?? 1,
-
-      raceId:
-        character.raceId ?? null,
-
-      subraceId:
-        character.subraceId ?? null,
-
-      initiativeModifier: 0,
-
-      initiative: 0,
-
-      maxHP:
-        character.maxHP ?? 0,
-
-      currentHP:
-        character.currentHP ??
-        character.maxHP ??
-        0,
-
-      armorClass:
-        character.armorClass ?? 10,
-
-      spellSlots: [
-        ...(character.spellSlots ?? [])
-      ],
-
-      currentSpellSlots: [
-        ...(character.currentSpellSlots ??
-          character.spellSlots ??
-          [])
-      ]
-    })
+    return addParticipant(participant)
   }
 
   const selectTarget = (id) => {
@@ -454,6 +475,8 @@ export const useCombatStore = defineStore('combat', () => {
 
     participant.reactionUsed = false
 
+    clearOpportunityAttacksForParticipant(participant.id)
+
     participant.reactionACBonus = 0
 
     participant.attackActionActive =
@@ -473,6 +496,99 @@ export const useCombatStore = defineStore('combat', () => {
 
     participant.remainingMovement =
       participant.speed ?? 0
+  }
+
+  const queueOpportunityAttack = ({
+    attackerId,
+    targetId
+  } = {}) => {
+    const attacker = participants.value.find(
+      item => item.id === attackerId
+    )
+    const target = participants.value.find(
+      item => item.id === targetId
+    )
+
+    if (!attacker || !target) {
+      return false
+    }
+
+    if (attacker.id === target.id) {
+      return false
+    }
+
+    if (attacker.currentHP <= 0) {
+      return false
+    }
+
+    if (attacker.reactionUsed) {
+      return false
+    }
+
+    if (target.currentHP <= 0) {
+      return false
+    }
+
+    const exists = pendingOpportunityAttacks.value.some(
+      item =>
+        item.attackerId === attackerId &&
+        item.targetId === targetId
+    )
+
+    if (exists) {
+      return false
+    }
+
+    pendingOpportunityAttacks.value.push({
+      id: `oa-${attackerId}-${targetId}-${Date.now()}`,
+      attackerId,
+      targetId
+    })
+
+    return true
+  }
+
+  const declineOpportunityAttack = opportunityAttackId => {
+    const index = pendingOpportunityAttacks.value.findIndex(
+      item => item.id === opportunityAttackId
+    )
+
+    if (index < 0) {
+      return false
+    }
+
+    pendingOpportunityAttacks.value.splice(index, 1)
+    return true
+  }
+
+  const useOpportunityAttack = opportunityAttackId => {
+    const pending = pendingOpportunityAttacks.value.find(
+      item => item.id === opportunityAttackId
+    )
+
+    if (!pending) {
+      return false
+    }
+
+    if (!useReaction(pending.attackerId)) {
+      return false
+    }
+
+    pendingOpportunityAttacks.value =
+      pendingOpportunityAttacks.value.filter(
+        item => item.id !== opportunityAttackId
+      )
+
+    return true
+  }
+
+  const clearOpportunityAttacksForParticipant = participantId => {
+    pendingOpportunityAttacks.value =
+      pendingOpportunityAttacks.value.filter(
+        item =>
+          item.attackerId !== participantId &&
+          item.targetId !== participantId
+      )
   }
 
   const canMove = (
@@ -564,6 +680,55 @@ export const useCombatStore = defineStore('combat', () => {
     return participant.remainingMovement
   }
 
+  // Total movement spent during the current turn.
+  const getMovementUsed = (
+    participantId
+  ) => {
+    const participant =
+      participants.value.find(
+        item => item.id === participantId
+      )
+
+    if (!participant) {
+      return 0
+    }
+
+    return Number(participant.movementUsed ?? 0)
+  }
+
+  // Movement available during the current turn.
+  // Dash increases remainingMovement, so this reflects the actual
+  // allowance for the current turn rather than only base Speed.
+  const getMovementAllowance = (
+    participantId
+  ) => {
+    const participant =
+      participants.value.find(
+        item => item.id === participantId
+      )
+
+    if (!participant) {
+      return 0
+    }
+
+    return (
+      Number(participant.movementUsed ?? 0) +
+      Number(participant.remainingMovement ?? 0)
+    )
+  }
+
+  /*
+   * DASH
+   *
+   * Dash использует Action и добавляет
+   * скорость персонажа к текущему
+   * доступному перемещению.
+   *
+   * Например:
+   * скорость 25
+   * после Dash = 50
+   */
+
   const canDash = (
     participantId
   ) => {
@@ -616,10 +781,26 @@ export const useCombatStore = defineStore('combat', () => {
       return false
     }
 
+    /*
+     * Dash использует Action
+     */
     participant.actionUsed = true
 
     participant.actionType = 'dash'
 
+    /*
+     * Добавляем ещё одну скорость
+     *
+     * Было:
+     * 25
+     *
+     * После Dash:
+     * 50
+     *
+     * Если уже потратил 10:
+     * было 15 осталось
+     * после Dash станет 40
+     */
     participant.remainingMovement +=
       participant.speed
 
@@ -1040,29 +1221,49 @@ export const useCombatStore = defineStore('combat', () => {
   ) => {
     let combatOrder = order
 
+    /*
+     * Защита от:
+     *
+     * startCombat(undefined)
+     * startCombat(null)
+     * startCombat({})
+     *
+     * В этом случае строим порядок
+     * автоматически из участников.
+     */
     if (!Array.isArray(combatOrder)) {
       combatOrder = []
     }
 
+    /*
+     * Если порядок не передан,
+     * формируем его самостоятельно.
+     */
     if (
       combatOrder.length === 0
     ) {
-      combatOrder = participants.value
-        .filter(
-          participant =>
-            participant.currentHP > 0
-        )
-        .sort(
-          (a, b) =>
-            b.initiative -
-            a.initiative
-        )
-        .map(
-          participant =>
-            participant.id
-        )
+      const aliveParticipants = participants.value.filter(
+        participant => participant.currentHP > 0
+      )
+
+      aliveParticipants.forEach(participant => {
+        rollInitiative(participant)
+      })
+
+      combatOrder = aliveParticipants
+        .sort((a, b) => {
+          if (b.initiative !== a.initiative) {
+            return b.initiative - a.initiative
+          }
+          return b.initiativeModifier - a.initiativeModifier
+        })
+        .map(participant => participant.id)
     }
 
+    /*
+     * Убираем ID, которых больше
+     * нет среди участников.
+     */
     combatOrder =
       combatOrder.filter(
         id =>
@@ -1098,6 +1299,7 @@ export const useCombatStore = defineStore('combat', () => {
     ]
 
     turnIndex.value = 0
+    roundNumber.value = 1
 
     combatStarted.value = true
 
@@ -1191,6 +1393,10 @@ export const useCombatStore = defineStore('combat', () => {
       return false
     }
 
+    /*
+     * Старый участник больше
+     * не получает временный AC.
+     */
     const previousParticipant =
       currentParticipant.value
 
@@ -1201,9 +1407,17 @@ export const useCombatStore = defineStore('combat', () => {
         0
     }
 
+    if (nextIndex <= turnIndex.value) {
+      roundNumber.value += 1
+    }
+
     turnIndex.value =
       nextIndex
 
+    /*
+     * Новый участник получает
+     * полный набор ресурсов хода.
+     */
     resetTurnActions(
       currentParticipant.value
     )
@@ -1231,6 +1445,10 @@ export const useCombatStore = defineStore('combat', () => {
         0
     }
 
+    if (previousIndex >= turnIndex.value) {
+      roundNumber.value = Math.max(1, roundNumber.value - 1)
+    }
+
     turnIndex.value =
       previousIndex
 
@@ -1239,6 +1457,271 @@ export const useCombatStore = defineStore('combat', () => {
     )
 
     return true
+  }
+
+  const getAttackProfile = participantId => {
+    const participant = participants.value.find(
+      item => item.id === participantId
+    )
+
+    return getParticipantAttackProfile(participant)
+  }
+
+  const getAttackRangeMode = (attackProfile, distanceFeet) => {
+    if (!attackProfile) {
+      return {
+        valid: false,
+        ranged: false,
+        longRange: false,
+        reason: 'weapon-unavailable'
+      }
+    }
+
+    const distance = Number(distanceFeet ?? 0)
+
+    if (!attackProfile.isRanged && attackProfile.isThrown && distance > attackProfile.reach) {
+      if (distance <= attackProfile.longRange) {
+        return {
+          valid: true,
+          ranged: true,
+          longRange: distance > attackProfile.normalRange,
+          reason: null
+        }
+      }
+
+      return {
+        valid: false,
+        ranged: true,
+        longRange: true,
+        reason: 'out-of-range'
+      }
+    }
+
+    if (attackProfile.isRanged) {
+      if (distance > attackProfile.longRange) {
+        return {
+          valid: false,
+          ranged: true,
+          longRange: true,
+          reason: 'out-of-range'
+        }
+      }
+
+      return {
+        valid: true,
+        ranged: true,
+        longRange: distance > attackProfile.normalRange,
+        reason: null
+      }
+    }
+
+    if (distance > attackProfile.reach) {
+      return {
+        valid: false,
+        ranged: false,
+        longRange: false,
+        reason: 'out-of-reach'
+      }
+    }
+
+    return {
+      valid: true,
+      ranged: false,
+      longRange: false,
+      reason: null
+    }
+  }
+
+  const canMakeWeaponAttack = (attackerId, targetId, attackContext = {}) => {
+    const attacker = participants.value.find(item => item.id === attackerId)
+    const target = participants.value.find(item => item.id === targetId)
+
+    if (!attacker || !target) {
+      return { allowed: false, reason: 'participant-not-found' }
+    }
+
+    if (target.currentHP <= 0) {
+      return { allowed: false, reason: 'target-unconscious' }
+    }
+
+    if (attacker.currentHP <= 0) {
+      return { allowed: false, reason: 'attacker-unconscious' }
+    }
+
+    if (currentTurn.value !== attackerId) {
+      return { allowed: false, reason: 'not-current-turn' }
+    }
+
+    if (!canUseAttackActionAttack(attackerId)) {
+      return { allowed: false, reason: 'attack-action-unavailable' }
+    }
+
+    const attackProfile = getAttackProfile(attackerId)
+    const range = getAttackRangeMode(
+      attackProfile,
+      attackContext.distanceFeet ?? 0
+    )
+
+    if (!range.valid) {
+      return { allowed: false, reason: range.reason }
+    }
+
+    if (attackContext.lineOfSight === false) {
+      return { allowed: false, reason: 'line-of-sight-blocked' }
+    }
+
+    if (attackContext.cover === 'total') {
+      return { allowed: false, reason: 'total-cover' }
+    }
+
+    const disadvantageSources = [
+      ...(attackContext.disadvantageSources ?? [])
+    ]
+
+    if (range.ranged && attackContext.withinFiveFeetOfHostile && !disadvantageSources.includes('hostile-within-5-feet')) {
+      disadvantageSources.push('hostile-within-5-feet')
+    }
+
+    if (range.longRange && !disadvantageSources.includes('long-range')) {
+      disadvantageSources.push('long-range')
+    }
+
+    return {
+      allowed: true,
+      attackProfile,
+      range,
+      disadvantageSources
+    }
+  }
+
+  const resolveWeaponAttack = ({
+    attackerId,
+    targetId,
+    attackContext = {}
+  } = {}) => {
+    const check = canMakeWeaponAttack(
+      attackerId,
+      targetId,
+      attackContext
+    )
+
+    if (!check.allowed) {
+      return {
+        success: false,
+        reason: check.reason
+      }
+    }
+
+    const attacker = participants.value.find(item => item.id === attackerId)
+    const target = participants.value.find(item => item.id === targetId)
+    const attackProfile = check.attackProfile
+
+    const advantageSources = [
+      ...(attackContext.advantageSources ?? [])
+    ]
+    const disadvantageSources = [
+      ...(check.disadvantageSources ?? attackContext.disadvantageSources ?? [])
+    ]
+
+    const mode = resolveRollMode(
+      advantageSources,
+      disadvantageSources
+    )
+
+    if (!useAttackActionAttack(attackerId)) {
+      return {
+        success: false,
+        reason: 'attack-action-unavailable'
+      }
+    }
+
+    const roll = rollD20ByMode(mode)
+    const d20 = roll.roll
+    const coverBonus = getCoverACBonus(attackContext.cover)
+    const baseTargetAC = getEffectiveArmorClass(targetId)
+    const targetAC = baseTargetAC + coverBonus
+    const total = d20 + Number(attackProfile.attackModifier ?? 0)
+    const critical = d20 === 20
+    const naturalOne = d20 === 1
+    const hit = critical || (!naturalOne && total >= targetAC)
+
+    let damage = null
+
+    if (hit) {
+      damage = rollWeaponDamage(
+        attackProfile.weapon.damage,
+        attackProfile.damageModifier,
+        critical,
+        attackProfile.weapon.id === 'unarmed-strike'
+      )
+
+      applyDamage(targetId, damage.total)
+    }
+
+    return {
+      success: true,
+      attackerId,
+      targetId,
+      weapon: attackProfile.weapon,
+      attackProfile,
+      mode,
+      advantageSources,
+      disadvantageSources,
+      rolls: roll.rolls,
+      d20,
+      attackBonus: attackProfile.attackModifier,
+      total,
+      targetAC,
+      baseTargetAC,
+      cover: attackContext.cover ?? null,
+      coverBonus,
+      critical,
+      naturalOne,
+      hit,
+      damage: damage?.total ?? 0,
+      damageRolls: damage?.rolls ?? [],
+      damageDiceTotal: damage?.diceTotal ?? 0,
+      targetCurrentHP: target.currentHP,
+      attacksUsed: attacker.attackActionAttacksUsed,
+      attacksRemaining: Math.max(
+        0,
+        attacker.attackActionMaxAttacks - attacker.attackActionAttacksUsed
+      )
+    }
+  }
+
+  const canMakeBasicAttack = (attackerId, targetId, attackContext = null) => {
+    return canMakeWeaponAttack(
+      attackerId,
+      targetId,
+      attackContext ?? {}
+    ).allowed
+  }
+
+  const resolveBasicAttack = ({
+    attackerId,
+    targetId,
+    advantage = false,
+    disadvantage = false,
+    attackContext = null
+  } = {}) => {
+    const context = {
+      ...(attackContext ?? {}),
+      advantageSources: [
+        ...(attackContext?.advantageSources ?? []),
+        ...(advantage ? ['legacy-advantage'] : [])
+      ],
+      disadvantageSources: [
+        ...(attackContext?.disadvantageSources ?? []),
+        ...(disadvantage ? ['legacy-disadvantage'] : [])
+      ]
+    }
+
+    return resolveWeaponAttack({
+      attackerId,
+      targetId,
+      attackContext: context
+    })
   }
 
   const setPendingAttack = (
@@ -1377,6 +1860,16 @@ export const useCombatStore = defineStore('combat', () => {
     )
   }
 
+  const setFlankingEnabled = enabled => {
+    flankingEnabled.value = Boolean(enabled)
+    return flankingEnabled.value
+  }
+
+  const toggleFlanking = () => {
+    flankingEnabled.value = !flankingEnabled.value
+    return flankingEnabled.value
+  }
+
   const endCombat = () => {
     combatStarted.value =
       false
@@ -1384,6 +1877,7 @@ export const useCombatStore = defineStore('combat', () => {
     turnOrder.value = []
 
     turnIndex.value = 0
+    roundNumber.value = 1
 
     selectedTargetId.value =
       null
@@ -1413,6 +1907,7 @@ export const useCombatStore = defineStore('combat', () => {
     turnOrder.value = []
 
     turnIndex.value = 0
+    roundNumber.value = 1
 
     selectedTargetId.value =
       null
@@ -1484,6 +1979,24 @@ export const useCombatStore = defineStore('combat', () => {
     return true
   }
 
+  const enemyPresets = {
+    goblin: { id: 'goblin', name: 'Гоблин', type: 'enemy', faction: 'enemy', maxHP: 7, currentHP: 7, armorClass: 15, speed: 30, initiativeModifier: 2, attackBonus: 4, damageDice: '1d6', damageBonus: 2 },
+    orc: { id: 'orc', name: 'Орк', type: 'enemy', faction: 'enemy', maxHP: 15, currentHP: 15, armorClass: 13, speed: 30, initiativeModifier: 1, attackBonus: 5, damageDice: '1d12', damageBonus: 3 },
+    skeleton: { id: 'skeleton', name: 'Скелет', type: 'enemy', faction: 'enemy', maxHP: 13, currentHP: 13, armorClass: 13, speed: 30, initiativeModifier: 2, attackBonus: 4, damageDice: '1d6', damageBonus: 2 }
+  }
+
+  const addEnemyPreset = presetId => {
+    const preset = enemyPresets[presetId]
+    if (!preset) return null
+    const count = participants.value.filter(item => item.enemyPreset === presetId).length + 1
+    return addParticipant({ ...preset, id: `${presetId}-${Date.now()}-${count}`, enemyPreset: presetId, name: count > 1 ? `${preset.name} ${count}` : preset.name })
+  }
+
+  const addTestPlayer = () => {
+    const count = participants.value.filter(item => item.type === 'player').length + 1
+    return addParticipant({ id: `test-player-${Date.now()}-${count}`, name: count > 1 ? `Игрок ${count}` : 'Тестовый герой', type: 'player', faction: 'friendly', level: 1, maxHP: 12, currentHP: 12, armorClass: 16, speed: 30, initiativeModifier: 2, attackBonus: 5, damageDice: '1d8', damageBonus: 3 })
+  }
+
   return {
     participants,
 
@@ -1498,12 +2011,17 @@ export const useCombatStore = defineStore('combat', () => {
     turnOrder,
 
     turnIndex,
+    roundNumber,
+    flankingEnabled,
 
     currentTurn,
 
     currentParticipant,
 
     addParticipant,
+    enemyPresets,
+    addEnemyPreset,
+    addTestPlayer,
 
     addCharacter,
 
@@ -1520,6 +2038,8 @@ export const useCombatStore = defineStore('combat', () => {
     moveParticipant,
 
     getRemainingMovement,
+    getMovementUsed,
+    getMovementAllowance,
 
     canUseAttackActionAttack,
 
@@ -1532,6 +2052,12 @@ export const useCombatStore = defineStore('combat', () => {
     useBonusAction,
 
     useReaction,
+
+    pendingOpportunityAttacks,
+    queueOpportunityAttack,
+    declineOpportunityAttack,
+    useOpportunityAttack,
+    clearOpportunityAttacksForParticipant,
 
     markBonusActionSpellCast,
 
@@ -1547,10 +2073,6 @@ export const useCombatStore = defineStore('combat', () => {
 
     useDash,
 
-    canDisengage,
-
-    useDisengage,
-
     setTurnOrder,
 
     startCombat,
@@ -1560,11 +2082,18 @@ export const useCombatStore = defineStore('combat', () => {
     previousTurn,
 
     endCombat,
+    setFlankingEnabled,
+    toggleFlanking,
 
     resetCombat,
 
     pendingAttack,
 
+    getAttackProfile,
+    canMakeWeaponAttack,
+    resolveWeaponAttack,
+    canMakeBasicAttack,
+    resolveBasicAttack,
     setPendingAttack,
 
     clearPendingAttack,

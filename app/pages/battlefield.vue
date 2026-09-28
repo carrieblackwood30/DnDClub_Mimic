@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted } from 'vue'
-import Battlefield from '~/components/battlefield/Battlefield.vue'
+import Battlefield from '~/components/battlefield/battlefield.vue'
 import { useBattlefieldStore } from '~/stores/battlefield'
 import { previewParticipants } from '~/data/battlefield/battlefieldDefaults'
 

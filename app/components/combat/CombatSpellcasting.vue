@@ -21,6 +21,9 @@ const {
 const {
   getAvailableCantrips,
   getAvailableLevelledSpells,
+  getKnownSpells,
+  getPreparedSpells,
+  getSpellbookSpells,
   getCurrentSpellSlotCount,
   getMaxSpellSlotCount,
   canCastSpell,
@@ -74,6 +77,36 @@ const levelledSpells = computed(() => {
   }
 
   return getAvailableLevelledSpells(
+    participantId.value
+  )
+})
+
+const knownSpells = computed(() => {
+  if (!participantId.value) {
+    return []
+  }
+
+  return getKnownSpells(
+    participantId.value
+  )
+})
+
+const preparedSpells = computed(() => {
+  if (!participantId.value) {
+    return []
+  }
+
+  return getPreparedSpells(
+    participantId.value
+  )
+})
+
+const spellbookSpells = computed(() => {
+  if (!participantId.value) {
+    return []
+  }
+
+  return getSpellbookSpells(
     participantId.value
   )
 })
@@ -688,6 +721,23 @@ const getTargetAC = () => {
           Использовать
         </button>
       </div>
+    </div>
+
+    <div
+      v-if="!cantrips.length && !levelledSpells.length"
+      class="rounded border p-3 text-sm opacity-70"
+    >
+      <template v-if="spellbookSpells.length && !preparedSpells.length">
+        Есть {{ spellbookSpells.length }} заклинаний в книге, но ни одно не подготовлено для боя.
+      </template>
+
+      <template v-else-if="knownSpells.length">
+        Известные заклинания есть, но сейчас они недоступны для накладывания.
+      </template>
+
+      <template v-else>
+        У этого участника нет изученных или подготовленных заклинаний.
+      </template>
     </div>
 
     <div
