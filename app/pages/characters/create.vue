@@ -135,11 +135,7 @@ const createCharacter = () => {
     <div class="mt-8">
       <CharacterSummary />
     </div>
-
-    <div class="mt-8">
-      <CharacterSummary />
-    </div>
-
+    
     <div class="mt-10">
       <button
         type="button"

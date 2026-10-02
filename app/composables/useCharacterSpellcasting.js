@@ -2,38 +2,37 @@ import { computed } from 'vue'
 
 import { spells } from '~/data/spells'
 import {
-  fullCasterSpellSlots,
-  halfCasterSpellSlots,
-  pactMagicSlots
-} from '~/data/spellSlots'
-import { spellcastingProgression } from '~/data/spellcastingProgression'
+  getCantripCount,
+  getKnownSpellCount,
+  getPreparedSpellCount,
+  getSpellbookLimit,
+  getSpellSlots
+} from '~/domain/spells/spellcastingProgression'
+import { isSpellAvailableToClass } from '~/domain/spells/spellAvailability'
 import { useCharacterCreatorStore } from '~/stores/characterCreator'
 import { useCharacterStats } from '~/composables/useCharacterStats'
 import { useClassesStore } from '~/stores/classes'
 
 export const useCharacterSpellcasting = () => {
-  const characterCreator = useCharacterCreatorStore()
-  const classesStore = useClassesStore()
-  const { abilityScores } = useCharacterStats()
+  const characterCreator =
+    useCharacterCreatorStore()
+
+  const classesStore =
+    useClassesStore()
+
+  const { abilityScores } =
+    useCharacterStats()
 
   const characterClass = computed(() => {
-    if (!characterCreator.classId) {
-      return null
-    }
-
-    return classesStore.getClassById(
-      characterCreator.classId
-    )
+    return characterCreator.classId
+      ? classesStore.getClassById(
+          characterCreator.classId
+        )
+      : null
   })
 
   const spellcasting = computed(() => {
     return characterClass.value?.spellcasting ?? null
-  })
-
-  const progression = computed(() => {
-    return spellcastingProgression[
-      characterCreator.classId
-    ] ?? null
   })
 
   const canCastSpells = computed(() => {
@@ -41,8 +40,11 @@ export const useCharacterSpellcasting = () => {
       return false
     }
 
-    return characterCreator.level >= (
-      spellcasting.value.startsAtLevel ?? 1
+    return (
+      characterCreator.level >=
+      (
+        spellcasting.value.startsAtLevel ?? 1
+      )
     )
   })
 
@@ -62,16 +64,22 @@ export const useCharacterSpellcasting = () => {
     )
   })
 
-  const spellcastingAbilityModifier = computed(() => {
-    return Math.floor(
-      (spellcastingAbilityScore.value - 10) / 2
-    )
-  })
+  const spellcastingAbilityModifier =
+    computed(() => {
+      return Math.floor(
+        (
+          spellcastingAbilityScore.value -
+          10
+        ) / 2
+      )
+    })
 
   const proficiencyBonus = computed(() => {
     return (
       Math.floor(
-        (characterCreator.level - 1) / 4
+        (
+          characterCreator.level - 1
+        ) / 4
       ) + 2
     )
   })
@@ -104,129 +112,68 @@ export const useCharacterSpellcasting = () => {
       return []
     }
 
-    const level = Math.min(
-      Math.max(characterCreator.level, 1),
-      20
+    return getSpellSlots(
+      spellcasting.value?.slotProgression,
+      characterCreator.level
     )
+  })
 
-    const slotProgression =
-      spellcasting.value?.slotProgression
-
-    if (slotProgression === 'full-caster') {
-      return fullCasterSpellSlots[level] ?? []
-    }
-
-    if (slotProgression === 'half-caster') {
-      return halfCasterSpellSlots[level] ?? []
-    }
-
-    if (slotProgression === 'pact-magic') {
-      const pact = pactMagicSlots[level]
-
-      if (!pact || pact.slots === 0) {
-        return []
+  const highestSpellSlotLevel =
+    computed(() => {
+      for (
+        let index =
+          spellSlots.value.length - 1;
+        index >= 0;
+        index -= 1
+      ) {
+        if (
+          spellSlots.value[index] > 0
+        ) {
+          return index + 1
+        }
       }
 
-      return Array.from(
-        { length: 9 },
-        (_, index) =>
-          index + 1 === pact.level
-            ? pact.slots
-            : 0
+      return 0
+    })
+
+  const cantripsKnownLimit =
+    computed(() => {
+      if (!canCastSpells.value) {
+        return 0
+      }
+
+      return (
+        getCantripCount(
+          characterCreator.classId,
+          characterCreator.level
+        ) ?? 0
       )
-    }
-
-    return []
-  })
-
-  const highestSpellSlotLevel = computed(() => {
-    const slots = spellSlots.value
-
-    for (
-      let index = slots.length - 1;
-      index >= 0;
-      index--
-    ) {
-      if (slots[index] > 0) {
-        return index + 1
-      }
-    }
-
-    return 0
-  })
-
-  const cantripsKnownLimit = computed(() => {
-    if (!canCastSpells.value) {
-      return 0
-    }
-
-    const cantripsKnown =
-      progression.value?.cantripsKnown
-
-    if (!cantripsKnown) {
-      return 0
-    }
-
-    const index = Math.min(
-      Math.max(characterCreator.level, 1),
-      cantripsKnown.length
-    ) - 1
-
-    return cantripsKnown[index] ?? 0
-  })
+    })
 
   const spellsKnownLimit = computed(() => {
     if (!canCastSpells.value) {
       return 0
     }
 
-    const spellsKnown =
-      progression.value?.spellsKnown
-
-    if (!spellsKnown) {
-      return null
-    }
-
-    const index = Math.min(
-      Math.max(characterCreator.level, 1),
-      spellsKnown.length
-    ) - 1
-
-    return spellsKnown[index] ?? 0
+    return getKnownSpellCount(
+      characterCreator.classId,
+      characterCreator.level
+    )
   })
 
   const preparedSpellLimit = computed(() => {
-    if (!canCastSpells.value) {
-      return 0
-    }
-
-    if (spellcasting.value?.type !== 'prepared') {
+    if (
+      !canCastSpells.value ||
+      spellcasting.value?.type !== 'prepared'
+    ) {
       return null
     }
 
-    const formula =
-      spellcasting.value?.preparation?.formula
-
-    if (formula === 'ability-modifier-plus-level') {
-      return Math.max(
-        spellcasting.value.preparation.minimum ?? 1,
-        spellcastingAbilityModifier.value +
-        characterCreator.level
-      )
-    }
-
-    if (
-      formula ===
-      'ability-modifier-plus-half-level'
-    ) {
-      return Math.max(
-        spellcasting.value.preparation.minimum ?? 1,
-        spellcastingAbilityModifier.value +
-        Math.floor(characterCreator.level / 2)
-      )
-    }
-
-    return null
+    return getPreparedSpellCount(
+      characterCreator.classId,
+      characterCreator.level,
+      spellcastingAbilityModifier.value
+    )
   })
 
   const spellbookLimit = computed(() => {
@@ -234,19 +181,9 @@ export const useCharacterSpellcasting = () => {
       return 0
     }
 
-    const spellbook =
-      progression.value?.spellbook
-
-    if (!spellbook) {
-      return null
-    }
-
-    return (
-      spellbook.initialSpells +
-      Math.max(
-        0,
-        characterCreator.level - 1
-      ) * spellbook.spellsPerLevel
+    return getSpellbookLimit(
+      characterCreator.classId,
+      characterCreator.level
     )
   })
 
@@ -257,20 +194,18 @@ export const useCharacterSpellcasting = () => {
 
     return spells.filter(spell => {
       if (
-        !spell.classes.includes(
+        !isSpellAvailableToClass(
+          spell,
           characterCreator.classId
         )
       ) {
         return false
       }
 
-      if (spell.level === 0) {
-        return true
-      }
-
       return (
+        spell.level === 0 ||
         spell.level <=
-        highestSpellSlotLevel.value
+          highestSpellSlotLevel.value
       )
     })
   })
@@ -281,11 +216,12 @@ export const useCharacterSpellcasting = () => {
     )
   })
 
-  const availableLevelledSpells = computed(() => {
-    return availableSpells.value.filter(
-      spell => spell.level > 0
-    )
-  })
+  const availableLevelledSpells =
+    computed(() => {
+      return availableSpells.value.filter(
+        spell => spell.level > 0
+      )
+    })
 
   const knownCantrips = computed(() => {
     return spells.filter(spell =>
@@ -325,157 +261,160 @@ export const useCharacterSpellcasting = () => {
     )
   })
 
-  const preparedLevelledSpells = computed(() => {
-    return preparedSpells.value.filter(
-      spell => spell.level > 0
-    )
-  })
+  const preparedLevelledSpells =
+    computed(() => {
+      return preparedSpells.value.filter(
+        spell => spell.level > 0
+      )
+    })
 
-  const isCantripKnown = (spellId) => {
-    return characterCreator.knowsCantrip(spellId)
-  }
-
-  const isSpellKnown = (spellId) => {
-    return characterCreator.knowsSpell(spellId)
-  }
-
-  const isSpellInSpellbook = (spellId) => {
-    return characterCreator.spellbookSpellIds.includes(
+  const isCantripKnown = spellId => {
+    return characterCreator.knowsCantrip(
       spellId
     )
   }
 
-  const isSpellPrepared = (spellId) => {
-    return characterCreator.preparedSpellIds.includes(
+  const isSpellKnown = spellId => {
+    return characterCreator.knowsSpell(
       spellId
     )
   }
 
-  const isSpellAvailable = (spell) => {
+  const isSpellInSpellbook = spellId => {
+    return characterCreator.hasSpell(
+      spellId
+    )
+  }
+
+  const isSpellPrepared = spellId => {
+    return characterCreator.isSpellPrepared(
+      spellId
+    )
+  }
+
+  const isSpellAvailable = spell => {
     return availableSpells.value.some(
       availableSpell =>
-        availableSpell.id === spell.id
+        availableSpell.id ===
+        spell?.id
     )
   }
 
-  const canLearnCantrip = (spell) => {
-    if (!isSpellAvailable(spell)) {
+  const canLearnCantrip = spell => {
+    if (
+      !isSpellAvailable(spell) ||
+      spell.level !== 0
+    ) {
       return false
-    }
-
-    if (spell.level !== 0) {
-      return false
-    }
-
-    if (isCantripKnown(spell.id)) {
-      return true
     }
 
     return (
+      isCantripKnown(spell.id) ||
       knownCantrips.value.length <
-      cantripsKnownLimit.value
+        cantripsKnownLimit.value
     )
   }
 
-  const canLearnSpell = (spell) => {
-    if (!isSpellAvailable(spell)) {
+  const canLearnSpell = spell => {
+    if (
+      !isSpellAvailable(spell) ||
+      spell.level === 0
+    ) {
       return false
     }
 
-    if (spell.level === 0) {
-      return false
-    }
-
-    if (spellcasting.value?.type === 'known') {
-      if (isSpellKnown(spell.id)) {
-        return true
-      }
-
+    if (
+      spellcasting.value?.type ===
+        'known' ||
+      spellcasting.value?.type ===
+        'pact'
+    ) {
       return (
+        isSpellKnown(spell.id) ||
         knownSpells.value.length <
-        spellsKnownLimit.value
+          (
+            spellsKnownLimit.value ?? 0
+          )
       )
     }
 
     if (
-      spellcasting.value?.spellbook?.enabled === true
+      spellcasting.value?.spellbook
+        ?.enabled === true
     ) {
-      if (isSpellInSpellbook(spell.id)) {
-        return true
-      }
-
       return (
+        isSpellInSpellbook(spell.id) ||
         spellbookSpells.value.length <
-        spellbookLimit.value
+          (
+            spellbookLimit.value ?? 0
+          )
       )
     }
 
     return false
   }
 
-  const canPrepareSpell = (spell) => {
-    if (!isSpellAvailable(spell)) {
-      return false
-    }
-
-    if (spell.level === 0) {
-      return false
-    }
-
-    if (spellcasting.value?.type !== 'prepared') {
+  const canPrepareSpell = spell => {
+    if (
+      !isSpellAvailable(spell) ||
+      spell.level === 0 ||
+      spellcasting.value?.type !==
+        'prepared'
+    ) {
       return false
     }
 
     if (
-      spellcasting.value?.spellbook?.enabled === true &&
+      spellcasting.value?.spellbook
+        ?.enabled === true &&
       !isSpellInSpellbook(spell.id)
     ) {
       return false
     }
 
-    if (isSpellPrepared(spell.id)) {
-      return true
-    }
-
-    if (preparedSpellLimit.value === null) {
-      return true
-    }
-
     return (
+      isSpellPrepared(spell.id) ||
       preparedLevelledSpells.value.length <
-      preparedSpellLimit.value
+        (
+          preparedSpellLimit.value ?? 0
+        )
     )
   }
 
-  const learnCantrip = (spell) => {
+  const learnCantrip = spell => {
     if (!canLearnCantrip(spell)) {
       return false
     }
 
-    characterCreator.learnCantrip(
+    return characterCreator.learnCantrip(
       spell.id,
       cantripsKnownLimit.value
+    )
+  }
+
+  const forgetCantrip = spell => {
+    if (!isCantripKnown(spell.id)) {
+      return false
+    }
+
+    characterCreator.forgetCantrip(
+      spell.id
     )
 
     return true
   }
 
-  const forgetCantrip = (spell) => {
-    if (!isCantripKnown(spell.id)) {
-      return false
-    }
-
-    characterCreator.forgetCantrip(spell.id)
-
-    return true
-  }
-
-  const learnSpell = (spell) => {
+  const learnSpell = spell => {
     if (!canLearnSpell(spell)) {
       return false
     }
 
-    if (spellcasting.value?.type === 'known') {
+    if (
+      spellcasting.value?.type ===
+        'known' ||
+      spellcasting.value?.type ===
+        'pact'
+    ) {
       characterCreator.learnKnownSpell(
         spell.id
       )
@@ -484,7 +423,8 @@ export const useCharacterSpellcasting = () => {
     }
 
     if (
-      spellcasting.value?.spellbook?.enabled === true
+      spellcasting.value?.spellbook
+        ?.enabled === true
     ) {
       characterCreator.learnSpell(
         spell.id
@@ -496,8 +436,13 @@ export const useCharacterSpellcasting = () => {
     return false
   }
 
-  const forgetSpell = (spell) => {
-    if (spellcasting.value?.type === 'known') {
+  const forgetSpell = spell => {
+    if (
+      spellcasting.value?.type ===
+        'known' ||
+      spellcasting.value?.type ===
+        'pact'
+    ) {
       if (!isSpellKnown(spell.id)) {
         return false
       }
@@ -510,9 +455,12 @@ export const useCharacterSpellcasting = () => {
     }
 
     if (
-      spellcasting.value?.spellbook?.enabled === true
+      spellcasting.value?.spellbook
+        ?.enabled === true
     ) {
-      if (!isSpellInSpellbook(spell.id)) {
+      if (
+        !isSpellInSpellbook(spell.id)
+      ) {
         return false
       }
 
@@ -526,7 +474,7 @@ export const useCharacterSpellcasting = () => {
     return false
   }
 
-  const prepareSpell = (spell) => {
+  const prepareSpell = spell => {
     if (!canPrepareSpell(spell)) {
       return false
     }
@@ -538,7 +486,7 @@ export const useCharacterSpellcasting = () => {
     return true
   }
 
-  const unprepareSpell = (spell) => {
+  const unprepareSpell = spell => {
     if (!isSpellPrepared(spell.id)) {
       return false
     }
@@ -550,70 +498,69 @@ export const useCharacterSpellcasting = () => {
     return true
   }
 
-const canCastSpell = (spell) => {
-    if (!canCastSpells.value) {
+  const canCastSpell = spell => {
+    if (
+      !canCastSpells.value ||
+      !spell
+    ) {
       return false
     }
 
     if (spell.level === 0) {
-      return isCantripKnown(spell.id)
+      return isCantripKnown(
+        spell.id
+      )
     }
 
-    const hasAvailableSlot =
-      spellSlots.value[spell.level - 1] > 0
-
-    if (!hasAvailableSlot) {
+    if (
+      (
+        spellSlots.value[
+          spell.level - 1
+        ] ?? 0
+      ) <= 0
+    ) {
       return false
     }
 
-    if (spellcasting.value?.type === 'known') {
+    if (
+      spellcasting.value?.type ===
+        'known' ||
+      spellcasting.value?.type ===
+        'pact'
+    ) {
       return isSpellKnown(spell.id)
     }
 
-    if (spellcasting.value?.type === 'prepared') {
+    if (
+      spellcasting.value?.type ===
+      'prepared'
+    ) {
       return isSpellPrepared(spell.id)
-    }
-
-    if (spellcasting.value?.type === 'pact') {
-      return isSpellKnown(spell.id)
     }
 
     return false
   }
 
-  const canCastPreparedSpell = (spell) => {
+  const canCastPreparedSpell = spell => {
     return canCastSpell(spell)
   }
 
   const initializeSpellbook = () => {
-    if (!canCastSpells.value) {
-      return false
-    }
-
     if (
-      spellcasting.value?.spellbook?.enabled !== true
+      !canCastSpells.value ||
+      spellcasting.value?.spellbook
+        ?.enabled !== true
     ) {
       return false
     }
 
-    const cantripsToLearn =
+    const cantrips =
       availableCantrips.value.slice(
         0,
         cantripsKnownLimit.value
       )
 
-    const initialSpellbookLimit =
-      progression.value?.spellbook?.initialSpells ?? 0
-
-    const spellsToLearn =
-      availableLevelledSpells.value
-        .filter(spell => spell.level === 1)
-        .slice(
-          0,
-          initialSpellbookLimit
-        )
-
-    for (const spell of cantripsToLearn) {
+    for (const spell of cantrips) {
       if (!isCantripKnown(spell.id)) {
         characterCreator.learnCantrip(
           spell.id,
@@ -622,7 +569,17 @@ const canCastSpell = (spell) => {
       }
     }
 
-    for (const spell of spellsToLearn) {
+    const initialSpells =
+      availableLevelledSpells.value
+        .filter(
+          spell => spell.level === 1
+        )
+        .slice(
+          0,
+          spellbookLimit.value ?? 0
+        )
+
+    for (const spell of initialSpells) {
       if (!isSpellInSpellbook(spell.id)) {
         characterCreator.learnSpell(
           spell.id
@@ -636,7 +593,6 @@ const canCastSpell = (spell) => {
   return {
     characterClass,
     spellcasting,
-    progression,
     canCastSpells,
     spellcastingAbility,
     spellcastingAbilityScore,

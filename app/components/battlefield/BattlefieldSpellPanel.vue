@@ -2,10 +2,16 @@
 import { computed, ref } from 'vue'
 import { useCombatStore } from '~/stores/combat'
 import { useBattlefieldStore } from '~/stores/battlefield'
+import { useCombat } from '~/composables/useCombat'
 import { useCombatSpellcasting } from '~/composables/useCombatSpellcasting'
 
 const combatStore = useCombatStore()
 const battlefieldStore = useBattlefieldStore()
+
+const {
+  useReactionEffect,
+  getEffectiveArmorClass
+} = useCombat()
 
 const {
   getAvailableCantrips,
@@ -22,14 +28,21 @@ const {
 
 const selectedSpellId = ref(null)
 const selectedTargetId = ref(null)
+const selectedSlotLevel = ref(null)
 const resultMessage = ref('')
-const result = ref(null)
+const resultDetails = ref([])
+const isResolving = ref(false)
 
-const participant = computed(() => {
-  return combatStore.currentParticipant ?? null
-})
-
+const participant = computed(() => combatStore.currentParticipant ?? null)
 const participantId = computed(() => participant.value?.id ?? null)
+
+const casterToken = computed(() => {
+  if (!participantId.value) return null
+
+  return battlefieldStore.tokens.find(
+    token => token.combatParticipantId === participantId.value
+  ) ?? null
+})
 
 const cantrips = computed(() => {
   if (!participantId.value) return []
@@ -55,10 +68,10 @@ const selectedSpell = computed(() => {
 const targets = computed(() => {
   if (!participantId.value) return []
 
-  return combatStore.participants.filter(participantItem => {
+  return combatStore.participants.filter(item => {
     return (
-      participantItem.id !== participantId.value &&
-      Number(participantItem.currentHP ?? 0) > 0
+      item.id !== participantId.value &&
+      Number(item.currentHP ?? 0) > 0
     )
   })
 })
@@ -69,9 +82,59 @@ const selectedTarget = computed(() => {
   ) ?? null
 })
 
+const selectedTargetToken = computed(() => {
+  if (!selectedTargetId.value) return null
+
+  return battlefieldStore.tokens.find(
+    token => token.combatParticipantId === selectedTargetId.value
+  ) ?? null
+})
+
+const selectedTargetContext = computed(() => {
+  if (
+    !participantId.value ||
+    !selectedTargetId.value ||
+    !selectedSpell.value ||
+    !casterToken.value ||
+    !selectedTargetToken.value
+  ) {
+    return null
+  }
+
+  return battlefieldStore.getSpellTargetContext(
+    casterToken.value.id,
+    selectedTargetToken.value.id
+  )
+})
+
+const selectedSpellAreaContext = computed(() => {
+  const spell = selectedSpell.value
+
+  if (
+    !spell ||
+    spell.target?.type !== 'creatures-in-area' ||
+    !casterToken.value ||
+    !selectedTargetToken.value
+  ) {
+    return null
+  }
+
+  const direction = battlefieldStore.getSpellAreaDirection(
+    casterToken.value.id,
+    selectedTargetToken.value.position
+  )
+
+  if (!direction) return null
+
+  return battlefieldStore.getSpellAreaContext({
+    casterTokenId: casterToken.value.id,
+    direction,
+    sizeFeet: spell.area?.size ?? 15
+  })
+})
+
 const requiresTarget = computed(() => {
   const type = selectedSpell.value?.resolution?.type
-
   return (
     type === 'attack' ||
     type === 'saving-throw' ||
@@ -83,86 +146,68 @@ const isAreaSpell = computed(() => {
   const spell = selectedSpell.value
   if (!spell) return false
 
-  return Boolean(
-    spell.area ||
-    spell.special ||
-    spell.resolution?.type === 'special'
+  return spell.target?.type === 'creatures-in-area'
+})
+
+const availableSlotLevels = computed(() => {
+  const result = []
+  if (!participantId.value) return result
+
+  for (let level = 1; level <= 9; level += 1) {
+    const current = combatStore.getCurrentSpellSlotCount?.(
+      participantId.value,
+      level
+    ) ?? (participant.value?.currentSpellSlots?.[level - 1] ?? 0)
+
+    const maximum = combatStore.getMaxSpellSlotCount?.(
+      participantId.value,
+      level
+    ) ?? (participant.value?.spellSlots?.[level - 1] ?? 0)
+
+    if (maximum > 0) {
+      result.push({ level, current, maximum })
+    }
+  }
+
+  return result
+})
+
+const castableSlotLevels = computed(() => {
+  if (!selectedSpell.value || selectedSpell.value.level === 0) return []
+
+  return availableSlotLevels.value.filter(
+    slot =>
+      slot.level >= selectedSpell.value.level &&
+      slot.current > 0
   )
 })
 
-const spellContext = computed(() => {
-  if (
-    !participantId.value ||
-    !selectedTargetId.value ||
-    !selectedSpell.value
-  ) {
-    return null
-  }
+const pendingAttack = computed(() => combatStore.pendingAttack ?? null)
 
-  const casterToken = battlefieldStore.tokens.find(
-    token => token.combatParticipantId === participantId.value
-  )
-
-  const targetToken = battlefieldStore.tokens.find(
-    token => token.combatParticipantId === selectedTargetId.value
-  )
-
-  if (!casterToken || !targetToken) {
-    return null
-  }
-
-  return battlefieldStore.getCombatSpellContext(
-    casterToken.id,
-    targetToken.id,
-    selectedSpell.value
-  )
+const isShieldReaction = computed(() => {
+  return selectedSpell.value?.id === 'shield' &&
+    selectedSpell.value?.resolution?.type === 'reaction'
 })
 
-const canUseSelectedSpell = computed(() => {
-  if (!participantId.value || !selectedSpell.value) {
-    return false
-  }
+const canUseShieldReaction = computed(() => {
+  if (!participantId.value || !isShieldReaction.value) return false
 
-  if (!canCastSpell(participantId.value, selectedSpell.value)) {
-    return false
-  }
+  const attack = pendingAttack.value
+  if (!attack?.hit) return false
 
-  if (!requiresTarget.value) {
-    return !isAreaSpell.value
-  }
-
-  if (!selectedTargetId.value) {
-    return false
-  }
-
-  return canResolveSpellTarget(
-    participantId.value,
-    selectedSpell.value,
-    selectedTargetId.value,
-    spellContext.value?.distanceFeet
-  )
+  return !attack.critical && !participant.value?.reactionUsed
 })
-
-const selectSpell = spell => {
-  selectedSpellId.value = spell.id
-  selectedTargetId.value = null
-  resultMessage.value = ''
-  result.value = null
-}
-
-const clearSelection = () => {
-  selectedSpellId.value = null
-  selectedTargetId.value = null
-  resultMessage.value = ''
-  result.value = null
-}
 
 const getSpellState = spell => {
   if (!participantId.value) return '—'
 
   if (!canCastSpell(participantId.value, spell)) {
+    if (spell.resolution?.type === 'reaction') {
+      return 'Реакция недоступна'
+    }
+
     if (spell.level > 0) {
-      return 'Нет ячейки / недоступно'
+      return 'Нет доступной ячейки'
     }
 
     return 'Недоступно'
@@ -173,7 +218,7 @@ const getSpellState = spell => {
   }
 
   if (spell.resolution?.type === 'saving-throw') {
-    return `Спасбросок ${String(spell.resolution.ability).toUpperCase()} · СЛ ${getSpellSaveDC(participantId.value)}`
+    return `Спасбросок ${String(spell.resolution.ability ?? '').toUpperCase()} · СЛ ${getSpellSaveDC(participantId.value)}`
   }
 
   if (spell.resolution?.type === 'automatic-hit') {
@@ -181,42 +226,117 @@ const getSpellState = spell => {
   }
 
   if (spell.resolution?.type === 'reaction') {
-    return 'Реакция'
+    return pendingAttack.value?.hit ? 'Реакция · доступна' : 'Реакция · ожидает триггер'
   }
 
-  if (spell.area || spell.special) {
-    return 'Особое / область'
-  }
-
-  return 'Эффект'
+  return 'Готово'
 }
 
-const getTargetState = target => {
+const selectSpell = spell => {
+  resultMessage.value = ''
+  resultDetails.value = []
+  selectedSpellId.value = spell.id
+  selectedTargetId.value = null
+  selectedSlotLevel.value = spell.level === 0
+    ? 0
+    : (availableSlotLevels.value.find(
+        slot => slot.level >= spell.level && slot.current > 0
+      )?.level ?? null)
+}
+
+const clearSelection = () => {
+  selectedSpellId.value = null
+  selectedTargetId.value = null
+  selectedSlotLevel.value = null
+  resultMessage.value = ''
+  resultDetails.value = []
+  isResolving.value = false
+}
+
+const getSpellTargetState = target => {
   if (!selectedSpell.value) return ''
 
-  const casterToken = battlefieldStore.tokens.find(
-    token => token.combatParticipantId === participantId.value
-  )
+  const caster = casterToken.value
   const targetToken = battlefieldStore.tokens.find(
     token => token.combatParticipantId === target.id
   )
 
-  if (!casterToken || !targetToken) {
+  if (!caster || !targetToken) {
     return 'Нет токена'
   }
 
-  const context = battlefieldStore.getCombatSpellContext(
-    casterToken.id,
-    targetToken.id,
-    selectedSpell.value
+  const context = battlefieldStore.getSpellTargetContext(
+    caster.id,
+    targetToken.id
   )
+
+  if (!context) return 'Нет контекста'
 
   if (!context.withinRange) {
     return `Вне дальности · ${context.distanceFeet} / ${getSpellRangeLabel(selectedSpell.value)}`
   }
 
+  if (!context.lineOfSight) {
+    return 'Нет Line of Sight'
+  }
+
+  if (context.cover === 'total') {
+    return 'Полное укрытие'
+  }
+
   return `${context.distanceFeet} ft`
 }
+
+const canUseSelectedSpell = computed(() => {
+  const spell = selectedSpell.value
+  if (!participantId.value || !spell) return false
+
+  if (isShieldReaction.value) {
+    return canUseShieldReaction.value
+  }
+
+  if (!canCastSpell(participantId.value, spell)) {
+    return false
+  }
+
+  if (isAreaSpell.value) {
+    if (!selectedTargetId.value || !selectedSpellAreaContext.value) {
+      return false
+    }
+
+    const rangeFeet = getSpellRangeFeet(spell)
+
+    if (rangeFeet === 0) {
+      return true
+    }
+
+    if (!selectedTargetContext.value) {
+      return false
+    }
+
+    return (
+      selectedTargetContext.value.withinRange &&
+      selectedTargetContext.value.lineOfSight &&
+      selectedTargetContext.value.cover !== 'total'
+    )
+  }
+
+  if (!requiresTarget.value) {
+    return true
+  }
+
+  if (!selectedTargetId.value || !selectedTargetContext.value) {
+    return false
+  }
+
+  return canResolveSpellTarget(
+    participantId.value,
+    spell,
+    selectedTargetId.value,
+    selectedTargetContext.value.distanceFeet,
+    selectedTargetContext.value
+  )
+})
 
 const getCastError = reason => {
   const labels = {
@@ -225,121 +345,402 @@ const getCastError = reason => {
     'casting-time-unavailable': 'Действие / бонусное действие / реакция уже использованы.',
     'invalid-target': 'Недопустимая цель.',
     'target-unconscious': 'Цель без сознания.',
-    'out-of-range': 'Цель находится вне дальности заклинания.',
-    'area-spell-not-supported': 'Это заклинание требует отдельного выбора области.'
+    'missing-saving-throw-ability': 'У заклинания не указан тип спасброска.',
+    'invalid-area-context': 'Не удалось определить область заклинания.',
+    'reaction-unavailable': 'Реакция уже использована.',
+    'attack-did-not-hit': 'Реакция больше не нужна: атака не попала.',
+    'critical-hit': 'Щит нельзя применить после критического попадания.'
   }
 
   return labels[reason] ?? 'Не удалось использовать заклинание.'
 }
 
-const getResultText = resolution => {
-  if (!resolution?.success) {
-    return getCastError(resolution?.reason)
+const applyResolutionEffects = resolution => {
+  if (!resolution) {
+    return resolution
   }
 
-  const target = combatStore.participants.find(
-    item => item.id === resolution.targetId
-  )
-  const targetName = target?.name ?? 'цель'
+  if (resolution.type === 'area-saving-throw') {
+    for (const result of resolution.results ?? []) {
+      if (
+        result.damage?.success &&
+        result.damage.total > 0 &&
+        result.combatParticipantId
+      ) {
+        result.damageApplied = combatStore.applyDamage(
+          result.combatParticipantId,
+          result.damage.total
+        )
+      } else {
+        result.damageApplied = null
+      }
+
+      if (
+        result.push?.distanceFeet > 0 &&
+        result.tokenId &&
+        resolution.area?.casterTokenId
+      ) {
+        battlefieldStore.pushToken(
+          result.tokenId,
+          resolution.area.casterTokenId,
+          result.push.distanceFeet
+        )
+      }
+    }
+
+    return resolution
+  }
+
+  if (
+    resolution.damage?.success &&
+    resolution.damage.total > 0 &&
+    resolution.targetId
+  ) {
+    resolution.damageApplied = combatStore.applyDamage(
+      resolution.targetId,
+      resolution.damage.total
+    )
+  } else {
+    resolution.damageApplied = null
+  }
+
+  if (
+    resolution.push?.distanceFeet > 0 &&
+    resolution.targetId &&
+    casterToken.value
+  ) {
+    const targetToken = selectedTargetToken.value
+    if (targetToken) {
+      battlefieldStore.pushToken(
+        targetToken.id,
+        casterToken.value.id,
+        resolution.push.distanceFeet
+      )
+    }
+  }
+
+  return resolution
+}
+
+const getResolutionLines = resolution => {
+  if (!resolution?.success) {
+    return []
+  }
+
+  const formatDamage = damage => {
+    const total = Number(damage?.total ?? 0)
+    const type = damage?.type ? ` ${damage.type}` : ''
+    return `Урон: ${total}${type}`
+  }
+
+  const formatAppliedHP = applied => {
+    if (!applied) {
+      return null
+    }
+
+    return `HP цели: ${applied.currentHP}/${applied.maxHP}`
+  }
 
   if (resolution.type === 'attack') {
-    if (resolution.critical) {
-      return `${resolution.spell.name}: КРИТ! d20 ${resolution.roll}. ${targetName} получает ${resolution.damage?.total ?? 0} ${resolution.damage?.type ?? ''} урона.`
+    const target = combatStore.participants.find(
+      item => item.id === resolution.targetId
+    )
+
+    const lines = [
+      `Цель: ${target?.name ?? '—'}`,
+      `d20 ${resolution.roll} ${resolution.rollMode !== 'normal' ? `(${resolution.rollMode})` : ''}`,
+      `Итог: ${resolution.total} против AC ${resolution.targetAC}`,
+      `Бонус атаки: ${resolution.attackBonus >= 0 ? '+' : ''}${resolution.attackBonus}`,
+      resolution.hit
+        ? 'Результат: ПОПАДАНИЕ'
+        : (resolution.criticalFailure ? 'Результат: КРИТИЧЕСКИЙ ПРОМАХ' : 'Результат: ПРОМАХ')
+    ]
+
+    if (resolution.hit) {
+      lines.push(formatDamage(resolution.damage))
+
+      if (resolution.damage?.rolls?.length) {
+        lines.push(
+          `Кости урона: ${resolution.damage.dice} · ${resolution.damage.rolls.join(' + ')}`
+        )
+      }
+
+      const hpLine = formatAppliedHP(
+        resolution.damageApplied
+      )
+
+      if (hpLine) {
+        lines.push(hpLine)
+      }
+
+      if (resolution.critical) {
+        lines.push('Критическое попадание · кости урона удвоены')
+      }
+
+      if (resolution.damageApplied?.defeated) {
+        lines.push('Цель повержена')
+      }
     }
 
-    if (resolution.criticalFailure) {
-      return `${resolution.spell.name}: критический промах. d20 ${resolution.roll}.`
-    }
-
-    if (!resolution.hit) {
-      return `${resolution.spell.name}: промах. d20 ${resolution.roll} + ${resolution.attackBonus} против AC ${resolution.targetAC}.`
-    }
-
-    return `${resolution.spell.name}: попадание. d20 ${resolution.roll} + ${resolution.attackBonus} = ${resolution.total}. ${targetName} получает ${resolution.damage?.total ?? 0} ${resolution.damage?.type ?? ''} урона.`
+    return lines
   }
 
   if (resolution.type === 'saving-throw') {
-    if (resolution.passed) {
-      return `${resolution.spell.name}: ${targetName} прошёл спасбросок ${String(resolution.ability).toUpperCase()} (${resolution.total} против СЛ ${resolution.saveDC}). Урон: ${resolution.damage?.total ?? 0}.`
+    const target = combatStore.participants.find(
+      item => item.id === resolution.targetId
+    )
+
+    const lines = [
+      `Цель: ${target?.name ?? '—'}`,
+      `${String(resolution.ability ?? '').toUpperCase()} спасбросок`,
+      `d20 ${resolution.roll} + ${resolution.saveBonus} = ${resolution.total}`,
+      `${resolution.passed ? 'Результат: УСПЕХ' : 'Результат: ПРОВАЛ'} против СЛ ${resolution.saveDC}`
+    ]
+
+    if (resolution.damage) {
+      lines.push(formatDamage(resolution.damage))
+
+      if (resolution.damage?.rolls?.length) {
+        lines.push(
+          `Кости урона: ${resolution.damage.dice} · ${resolution.damage.rolls.join(' + ')}`
+        )
+      }
     }
 
-    return `${resolution.spell.name}: ${targetName} провалил спасбросок ${String(resolution.ability).toUpperCase()} (${resolution.total} против СЛ ${resolution.saveDC}). Урон: ${resolution.damage?.total ?? 0}.`
+    const hpLine = formatAppliedHP(
+      resolution.damageApplied
+    )
+
+    if (hpLine) {
+      lines.push(hpLine)
+    }
+
+    if (resolution.push?.distanceFeet > 0) {
+      lines.push(`Отталкивание: ${resolution.push.distanceFeet} ft`)
+    }
+
+    if (resolution.sleep?.applied) {
+      lines.push('Наложен эффект сна')
+    }
+
+    if (resolution.sleep?.immune) {
+      lines.push('Цель невосприимчива ко сну')
+    }
+
+    if (resolution.damageApplied?.defeated) {
+      lines.push('Цель повержена')
+    }
+
+    return lines
+  }
+
+  if (resolution.type === 'area-saving-throw') {
+    if (!(resolution.results ?? []).length) {
+      return ['В области нет существ для спасброска.']
+    }
+
+    return (resolution.results ?? []).flatMap(result => {
+      const target = combatStore.participants.find(
+        item => item.id === result.combatParticipantId
+      )
+
+      const lines = [
+        `Цель: ${target?.name ?? '—'}`,
+        `${String(result.ability ?? '').toUpperCase()} · d20 ${result.roll} + ${result.saveBonus} = ${result.total}`,
+        `${result.passed ? 'Результат: УСПЕХ' : 'Результат: ПРОВАЛ'} против СЛ ${result.saveDC}`
+      ]
+
+      if (result.damage) {
+        lines.push(formatDamage(result.damage))
+      }
+
+      const hpLine = formatAppliedHP(
+        result.damageApplied
+      )
+
+      if (hpLine) {
+        lines.push(hpLine)
+      }
+
+      if (result.push?.distanceFeet > 0) {
+        lines.push(`Отталкивание: ${result.push.distanceFeet} ft`)
+      }
+
+      if (result.sleep?.applied) {
+        lines.push('Наложен эффект сна')
+      }
+
+      if (result.damageApplied?.defeated) {
+        lines.push('Цель повержена')
+      }
+
+      return lines
+    })
   }
 
   if (resolution.type === 'automatic-hit') {
-    return `${resolution.spell.name}: автоматическое попадание по ${targetName}. Урон: ${resolution.damage?.total ?? 0} ${resolution.damage?.type ?? ''}.`
+    const lines = [
+      'Автоматическое попадание',
+      formatDamage(resolution.damage)
+    ]
+
+    const hpLine = formatAppliedHP(
+      resolution.damageApplied
+    )
+
+    if (hpLine) {
+      lines.push(hpLine)
+    }
+
+    if (resolution.damageApplied?.defeated) {
+      lines.push('Цель повержена')
+    }
+
+    return lines
   }
 
-  return `${resolution.spell.name}: заклинание использовано.`
+  return ['Заклинание использовано.']
 }
 
 const castSelectedSpell = () => {
   const spell = selectedSpell.value
   const casterId = participantId.value
-  const targetId = selectedTargetId.value
 
   if (!spell || !casterId) return
 
-  if (isAreaSpell.value) {
-    resultMessage.value = 'Это заклинание требует выбора области. Для него пока не тратится действие.'
+  isResolving.value = true
+  resultMessage.value = ''
+  resultDetails.value = []
+
+  if (isShieldReaction.value) {
+    const result = useReactionEffect(
+      casterId,
+      'shield',
+      {
+        trigger: 'incoming-attack',
+        attackResult: pendingAttack.value
+      }
+    )
+
+    if (!result.success) {
+      resultMessage.value = getCastError(result.reason)
+      isResolving.value = false
+      return
+    }
+
+    const attacker = pendingAttack.value?.attackerId
+      ? combatStore.participants.find(
+          item => item.id === pendingAttack.value.attackerId
+        )
+      : null
+
+    resultMessage.value = `Щит: +5 AC до начала вашего следующего хода.`
+    resultDetails.value = [
+      `Атака: d20 ${pendingAttack.value?.attackRoll ?? '—'} + ${pendingAttack.value?.attackModifier ?? 0}`,
+      `AC после Щита: ${getEffectiveArmorClass(casterId)}`,
+      attacker ? `Атакующий: ${attacker.name}` : 'Атакующий не указан'
+    ]
+
+    isResolving.value = false
     return
   }
 
   if (!canUseSelectedSpell.value) {
-    if (requiresTarget.value && spellContext.value && !spellContext.value.withinRange) {
-      resultMessage.value = `Цель вне дальности: ${spellContext.value.distanceFeet} / ${getSpellRangeLabel(spell)}.`
-      return
-    }
-
-    resultMessage.value = 'Заклинание сейчас недоступно.'
+    resultMessage.value = 'Заклинание сейчас недоступно или цель не подходит.'
+    isResolving.value = false
     return
   }
 
+  const slotLevel = spell.level === 0
+    ? 0
+    : selectedSlotLevel.value
+
   const castResult = castSpell(
     casterId,
-    spell
+    spell,
+    { slotLevel }
   )
 
   if (!castResult.success) {
     resultMessage.value = getCastError(castResult.reason)
+    isResolving.value = false
+    return
+  }
+
+  if (!castResult.requiresResolution) {
+    resultMessage.value = `${spell.name}: заклинание использовано.`
+    resultDetails.value = [
+      `Дальность: ${getSpellRangeLabel(spell)}`,
+      spell.concentration ? 'Требует концентрации' : 'Концентрация не требуется'
+    ]
+    isResolving.value = false
     return
   }
 
   const resolution = resolveSpell(
     casterId,
-    targetId,
+    isAreaSpell.value ? null : selectedTargetId.value,
     spell,
     {
-      slotLevel: castResult.slotLevel
+      slotLevel: castResult.slotLevel,
+      tokenId: selectedTargetToken.value?.id ?? null,
+      areaContext: selectedSpellAreaContext.value,
+      targetContext: selectedTargetContext.value,
+      withinFiveFeetOfHostile:
+        selectedTargetContext.value?.withinFiveFeetOfHostile ?? false
     }
   )
 
-  result.value = resolution
-
   if (!resolution.success) {
     resultMessage.value = getCastError(resolution.reason)
+    isResolving.value = false
     return
   }
 
-  if (resolution.damage?.success && resolution.damage.total > 0) {
-    combatStore.applyDamage(
-      resolution.targetId,
-      resolution.damage.total
+  applyResolutionEffects(resolution)
+
+  const spellName = resolution.spell?.name ?? spell.name
+
+  if (resolution.type === 'attack') {
+    const target = combatStore.participants.find(
+      item => item.id === resolution.targetId
     )
+    const targetName = target?.name ?? 'цель'
+
+    resultMessage.value = resolution.hit
+      ? `${spellName}: попадание по ${targetName}.`
+      : `${spellName}: ${resolution.criticalFailure ? 'критический промах по' : 'промах по'} ${targetName}.`
+  } else if (resolution.type === 'saving-throw') {
+    const target = combatStore.participants.find(
+      item => item.id === resolution.targetId
+    )
+    const targetName = target?.name ?? 'цель'
+
+    resultMessage.value = resolution.passed
+      ? `${spellName}: ${targetName} успешно прошёл спасбросок.`
+      : `${spellName}: ${targetName} провалил спасбросок.`
+  } else if (resolution.type === 'area-saving-throw') {
+    resultMessage.value = `${spellName}: спасброски разрешены.`
+  } else if (resolution.type === 'automatic-hit') {
+    resultMessage.value = `${spellName}: автоматическое попадание.`
+  } else {
+    resultMessage.value = `${spellName}: заклинание использовано.`
   }
 
-  resultMessage.value = getResultText(resolution)
+  resultDetails.value = getResolutionLines(resolution)
+
+  isResolving.value = false
 }
 </script>
 
 <template>
-  <section class="mt-3 rounded-2xl border border-[#496b78] bg-[#111b1e]/95 p-4 text-[#e7f1ee] shadow-2xl">
-    <div class="flex items-center justify-between gap-3">
-      <div>
-        <div class="text-[9px] font-semibold uppercase tracking-[0.2em] text-[#83aeb8]">
-          Заклинания
+  <section class="rounded-2xl border border-[#675338] bg-[#14110d]/95 text-[#eee3cd] shadow-2xl backdrop-blur-xl">
+    <div class="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+      <div class="min-w-0">
+        <div class="text-[9px] font-semibold uppercase tracking-[0.2em] text-[#a58a59]">
+          Боевые заклинания
         </div>
-        <div class="mt-1 text-sm font-semibold">
+        <div class="mt-1 truncate text-sm font-semibold">
           {{ participant?.name ?? 'Нет активного заклинателя' }}
         </div>
       </div>
@@ -347,146 +748,223 @@ const castSelectedSpell = () => {
       <button
         v-if="selectedSpell"
         type="button"
-        class="rounded-lg border border-[#53676b] px-2 py-1 text-[10px] text-[#c5d4d6]"
+        class="rounded-lg border border-[#5d4c34] px-2 py-1 text-[9px] text-[#cdbd9f]"
         @click="clearSelection"
       >
-        Сбросить
+        Назад
       </button>
     </div>
 
-    <div
-      v-if="!participant"
-      class="mt-3 rounded-xl border border-[#4a5558] bg-black/20 p-3 text-[11px] text-[#9eb0b3]"
-    >
-      Сейчас нет участника, который может использовать заклинания.
-    </div>
-
-    <template v-else>
-      <div class="mt-3 grid gap-2 md:grid-cols-2">
-        <button
-          v-for="spell in allSpells"
-          :key="spell.id"
-          type="button"
-          class="rounded-xl border p-3 text-left transition"
-          :class="selectedSpellId === spell.id
-            ? 'border-[#c9a95f] bg-[#2a2116]'
-            : 'border-[#33464a] bg-[#172125] hover:border-[#607c82]'"
-          @click="selectSpell(spell)"
-        >
-          <div class="flex items-start justify-between gap-2">
-            <div class="font-semibold text-[12px]">
-              {{ spell.name }}
-            </div>
-            <span class="text-[9px] text-[#91a7aa]">
-              {{ spell.level === 0 ? 'Заговор' : `${spell.level} ур.` }}
-            </span>
-          </div>
-
-          <div class="mt-1 text-[10px] text-[#a9bbbd]">
-            {{ getSpellRangeLabel(spell) }} · {{ getSpellState(spell) }}
-          </div>
-        </button>
-
-        <div
-          v-if="!allSpells.length"
-          class="rounded-xl border border-[#4a5558] bg-black/20 p-3 text-[11px] text-[#9eb0b3] md:col-span-2"
-        >
-          У этого участника нет известных или подготовленных заклинаний.
-        </div>
-      </div>
-
+    <div class="max-h-[calc(100vh-10rem)] overflow-y-auto p-3">
       <div
-        v-if="selectedSpell"
-        class="mt-3 rounded-xl border border-[#526c73] bg-black/20 p-3"
+        v-if="!participant"
+        class="rounded-xl border border-white/10 bg-black/20 p-3 text-[10px] text-[#9f927d]"
       >
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <div class="text-sm font-semibold">
-              {{ selectedSpell.name }}
+        Сейчас нет участника, который может использовать заклинания.
+      </div>
+
+      <template v-else>
+        <div
+          v-if="!selectedSpell"
+          class="grid grid-cols-1 gap-2 sm:grid-cols-2"
+        >
+          <button
+            v-for="spell in allSpells"
+            :key="spell.id"
+            type="button"
+            class="rounded-xl border border-[#403a31] bg-[#1a1611] px-3 py-2 text-left transition hover:border-[#756343]"
+            @click="selectSpell(spell)"
+          >
+            <div class="flex items-start justify-between gap-2">
+              <span class="text-[11px] font-semibold">
+                {{ spell.name }}
+              </span>
+              <span class="text-[8px] text-[#9b8d76]">
+                {{ spell.level === 0 ? 'Заговор' : `${spell.level} ур.` }}
+              </span>
             </div>
-            <div class="mt-1 text-[10px] text-[#a9bbbd]">
-              {{ getSpellRangeLabel(selectedSpell) }}
-              <span v-if="selectedSpell.resolution?.type === 'attack'">
-                · атака +{{ getSpellAttackBonus(participantId) }}
+
+            <div class="mt-1 text-[9px] text-[#a99c88]">
+              {{ getSpellRangeLabel(spell) }} · {{ getSpellState(spell) }}
+            </div>
+          </button>
+
+          <div
+            v-if="!allSpells.length"
+            class="rounded-xl border border-white/10 bg-black/20 p-3 text-[10px] text-[#9f927d] sm:col-span-2"
+          >
+            У текущего участника нет доступных заклинаний.
+          </div>
+        </div>
+
+        <div
+          v-else
+          class="space-y-3"
+        >
+          <div class="rounded-xl border border-[#514634] bg-[#1a1611] p-3">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div class="text-sm font-semibold">
+                  {{ selectedSpell.name }}
+                </div>
+                <div class="mt-1 text-[9px] text-[#a99c88]">
+                  {{ getSpellRangeLabel(selectedSpell) }}
+                  <span v-if="selectedSpell.resolution?.type === 'attack'">
+                    · атака +{{ getSpellAttackBonus(participantId) }}
+                  </span>
+                  <span v-else-if="selectedSpell.resolution?.type === 'saving-throw'">
+                    · {{ String(selectedSpell.resolution.ability).toUpperCase() }} СЛ {{ getSpellSaveDC(participantId) }}
+                  </span>
+                  <span v-else-if="selectedSpell.resolution?.type === 'reaction'">
+                    · реакция
+                  </span>
+                </div>
+              </div>
+
+              <span class="rounded-full border border-[#514634] px-2 py-1 text-[8px] text-[#cdbd9f]">
+                {{ getSpellState(selectedSpell) }}
               </span>
-              <span v-else-if="selectedSpell.resolution?.type === 'saving-throw'">
-                · {{ String(selectedSpell.resolution.ability).toUpperCase() }} СЛ {{ getSpellSaveDC(participantId) }}
-              </span>
-              <span v-else-if="selectedSpell.resolution?.type === 'automatic-hit'">
-                · автоматическое попадание
-              </span>
+            </div>
+
+            <div
+              v-if="selectedSpell.level > 0 && !isShieldReaction"
+              class="mt-3"
+            >
+              <label class="mb-1 block text-[9px] uppercase tracking-[0.14em] text-[#978b77]">
+                Ячейка
+              </label>
+              <select
+                v-model="selectedSlotLevel"
+                class="w-full rounded-lg border border-[#514a3e] bg-[#0f0c09] px-3 py-2 text-[10px] text-[#e8decb]"
+              >
+                <option
+                  v-for="slot in castableSlotLevels"
+                  :key="slot.level"
+                  :value="slot.level"
+                >
+                  {{ slot.level }} уровень · {{ slot.current }}/{{ slot.maximum }}
+                </option>
+              </select>
+            </div>
+
+            <div class="mt-3 grid gap-2 text-[9px] sm:grid-cols-2">
+              <div
+                v-if="selectedSpell.resolution?.type === 'attack'"
+                class="rounded-lg border border-white/10 bg-black/20 p-2"
+              >
+                <div>Бонус атаки: <strong>+{{ getSpellAttackBonus(participantId) }}</strong></div>
+                <div v-if="selectedTargetContext">
+                  AC цели: <strong>{{ getEffectiveArmorClass(selectedTargetId) }}</strong>
+                </div>
+              </div>
+
+              <div
+                v-if="selectedSpell.resolution?.type === 'saving-throw'"
+                class="rounded-lg border border-white/10 bg-black/20 p-2"
+              >
+                <div>Спасбросок: <strong>{{ String(selectedSpell.resolution.ability).toUpperCase() }}</strong></div>
+                <div>СЛ: <strong>{{ getSpellSaveDC(participantId) }}</strong></div>
+              </div>
+
+              <div
+                v-if="selectedTargetContext"
+                class="rounded-lg border border-white/10 bg-black/20 p-2"
+              >
+                <div>Дистанция: <strong>{{ selectedTargetContext.distanceFeet }} ft</strong></div>
+                <div>{{ selectedTargetContext.lineOfSight ? 'Line of Sight есть' : 'Line of Sight нет' }}</div>
+                <div>Укрытие: <strong>{{ selectedTargetContext.cover ?? 'нет' }}</strong></div>
+              </div>
+
+              <div
+                v-if="selectedSpell.resolution?.type === 'reaction'"
+                class="rounded-lg border border-[#695430] bg-[#251d12] p-2"
+              >
+                <div>Триггер: <strong>попадание по цели</strong></div>
+                <div>Бонус AC: <strong>+5</strong></div>
+                <div v-if="pendingAttack">Атака: d20 {{ pendingAttack.attackRoll }} + {{ pendingAttack.attackModifier }}</div>
+              </div>
+            </div>
+
+            <div
+              v-if="requiresTarget"
+              class="mt-3"
+            >
+              <label class="mb-1 block text-[9px] uppercase tracking-[0.14em] text-[#978b77]">
+                {{ isAreaSpell ? 'Направление области' : 'Цель' }}
+              </label>
+
+              <select
+                v-model="selectedTargetId"
+                class="w-full rounded-lg border border-[#514a3e] bg-[#0f0c09] px-3 py-2 text-[10px] text-[#e8decb]"
+              >
+                <option :value="null">
+                  {{ isAreaSpell ? 'Выберите направление' : 'Выберите цель' }}
+                </option>
+                <option
+                  v-for="target in targets"
+                  :key="target.id"
+                  :value="target.id"
+                >
+                  {{ target.name }} · HP {{ target.currentHP }}/{{ target.maxHP }} · {{ getSpellTargetState(target) }}
+                </option>
+              </select>
+            </div>
+
+            <div
+              v-if="selectedSpellAreaContext"
+              class="mt-2 rounded-lg border border-[#695430] bg-[#251d12] p-2 text-[9px] text-[#dbc99f]"
+            >
+              Область: {{ selectedSpellAreaContext.affectedTokens.length }} существ.
+              Спасбросок {{ String(selectedSpell.resolution?.ability ?? '').toUpperCase() }}
+              против СЛ {{ getSpellSaveDC(participantId) }}.
+            </div>
+
+            <div
+              v-if="isShieldReaction && !canUseShieldReaction"
+              class="mt-2 rounded-lg border border-[#75443f] bg-[#2a1715] p-2 text-[9px] text-[#e5aaa2]"
+            >
+              Щит можно применить только как реакцию на попавшую атаку до её разрешения.
+            </div>
+
+            <div class="mt-3 flex gap-2">
+              <button
+                type="button"
+                class="flex-1 rounded-xl border px-4 py-2 text-[10px] font-semibold"
+                :class="canUseSelectedSpell
+                  ? 'border-[#789b73] bg-[#22351f] text-[#d8ead3] hover:bg-[#2d4729]'
+                  : 'cursor-not-allowed border-[#3e4547] bg-[#151a1b] text-[#687274]'"
+                :disabled="isResolving || !canUseSelectedSpell"
+                @click="castSelectedSpell"
+              >
+                ✨ {{ isShieldReaction ? 'Применить Щит' : 'Использовать' }}
+              </button>
+
+              <button
+                type="button"
+                class="rounded-xl border border-[#514a3e] px-4 py-2 text-[10px] text-[#cdbd9f]"
+                :disabled="isResolving"
+                @click="clearSelection"
+              >
+                Отмена
+              </button>
             </div>
           </div>
 
-          <span class="rounded-full border border-[#405b60] px-2 py-1 text-[9px] text-[#a9bbbd]">
-            {{ getSpellState(selectedSpell) }}
-          </span>
-        </div>
-
-        <div
-          v-if="isAreaSpell"
-          class="mt-3 rounded-lg border border-[#715b39] bg-[#2a2116] p-3 text-[10px] text-[#d7c397]"
-        >
-          Это особое или площадное заклинание. Его не превращаем в одиночную атаку: область и её направление подключим отдельным шагом.
-        </div>
-
-        <div v-if="requiresTarget" class="mt-3">
-          <label class="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#91a7aa]">
-            Цель
-          </label>
-
-          <select
-            v-model="selectedTargetId"
-            class="mt-1 w-full rounded-lg border border-[#40565a] bg-[#0d1416] px-3 py-2 text-xs text-[#e3eeee] outline-none"
+          <div
+            v-if="resultMessage"
+            class="rounded-xl border border-[#4e6d54] bg-[#142016] p-3 text-[10px] text-[#d3e7d0]"
           >
-            <option :value="null">
-              Выберите цель
-            </option>
-            <option
-              v-for="target in targets"
-              :key="target.id"
-              :value="target.id"
+            <div class="font-semibold">{{ resultMessage }}</div>
+            <div
+              v-for="(line, index) in resultDetails"
+              :key="`${index}-${line}`"
+              class="mt-1 text-[#a9c5aa]"
             >
-              {{ target.name }} · HP {{ target.currentHP }}/{{ target.maxHP }} · {{ getTargetState(target) }}
-            </option>
-          </select>
+              {{ line }}
+            </div>
+          </div>
         </div>
-
-        <div
-          v-if="spellContext"
-          class="mt-2 flex flex-wrap gap-2 text-[10px]"
-        >
-          <span class="rounded-full border border-[#405b60] px-2 py-1">
-            Дистанция: {{ spellContext.distanceFeet }} ft
-          </span>
-          <span
-            class="rounded-full border px-2 py-1"
-            :class="spellContext.withinRange ? 'border-[#4e7659] text-[#b9d8bd]' : 'border-[#744b47] text-[#e0aaa3]'"
-          >
-            {{ spellContext.withinRange ? 'В дальности' : 'Вне дальности' }}
-          </span>
-        </div>
-
-        <button
-          v-if="requiresTarget && !isAreaSpell"
-          type="button"
-          class="mt-3 w-full rounded-xl border px-4 py-2.5 text-xs font-semibold transition"
-          :class="canUseSelectedSpell
-            ? 'border-[#789b73] bg-[#22351f] text-[#d8ead3] hover:bg-[#2d4729]'
-            : 'cursor-not-allowed border-[#3e4547] bg-[#151a1b] text-[#687274]'"
-          :disabled="!canUseSelectedSpell"
-          @click="castSelectedSpell"
-        >
-          ✨ Наложить заклинание
-        </button>
-
-        <div
-          v-if="resultMessage"
-          class="mt-3 rounded-lg border border-[#4e6d54] bg-[#142016] p-3 text-[11px] text-[#d3e7d0]"
-        >
-          {{ resultMessage }}
-        </div>
-      </div>
-    </template>
+      </template>
+    </div>
   </section>
 </template>

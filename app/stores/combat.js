@@ -1,99 +1,97 @@
-import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import { combatTargets } from '~/data/combatTargets'
-import { races } from '~/data/races'
-import { createCharacterParticipant, getParticipantAttackProfile } from '~/domain/combat/participantFactory'
-import { resolveRollMode, rollD20ByMode, rollWeaponDamage, getCoverACBonus } from '~/domain/combat/attackEngine'
+import { defineStore } from "pinia";
+import { ref, computed } from "vue";
+import { combatTargets } from "~/data/combatTargets";
+import { races } from "~/data/races";
+import {
+  createCharacterParticipant,
+  getParticipantAttackProfile,
+} from "~/domain/combat/participantFactory";
+import {
+  resolveRollMode,
+  rollD20ByMode,
+  rollWeaponDamage,
+  getCoverACBonus,
+} from "~/domain/combat/attackEngine";
 
-export const useCombatStore = defineStore('combat', () => {
+export const useCombatStore = defineStore("combat", () => {
   const getActionSurgeUses = (participant) => {
-    if (
-      participant.classId !== 'fighter' &&
-      participant.classId !== 'Воин'
-    ) {
-      return 0
+    if (participant.classId !== "fighter" && participant.classId !== "Воин") {
+      return 0;
     }
 
-    const level = Number(
-      participant.level ?? 1
-    )
+    const level = Number(participant.level ?? 1);
 
     if (level < 2) {
-      return 0
+      return 0;
     }
 
-    return level >= 17 ? 2 : 1
-  }
+    return level >= 17 ? 2 : 1;
+  };
 
   const getParticipantSpeed = (participant) => {
     if (participant.speed != null) {
-      return Number(participant.speed)
+      return Number(participant.speed);
     }
 
     if (participant.raceId) {
-      const race = races.find(
-        item => item.id === participant.raceId
-      )
+      const race = races.find((item) => item.id === participant.raceId);
 
       if (race) {
         if (participant.subraceId) {
           const subrace = race.subraces?.find(
-            item => item.id === participant.subraceId
-          )
+            (item) => item.id === participant.subraceId,
+          );
 
           if (subrace?.speed != null) {
-            return Number(subrace.speed)
+            return Number(subrace.speed);
           }
         }
 
         if (race.speed != null) {
-          return Number(race.speed)
+          return Number(race.speed);
         }
       }
     }
 
-    return 30
-  }
+    return 30;
+  };
 
-  const getInitiativeModifier = participant => {
+  const getInitiativeModifier = (participant) => {
     if (participant?.initiativeModifier != null) {
-      return Number(participant.initiativeModifier) || 0
+      return Number(participant.initiativeModifier) || 0;
     }
 
     if (participant?.dexterity != null) {
-      return Math.floor((Number(participant.dexterity) - 10) / 2)
+      return Math.floor((Number(participant.dexterity) - 10) / 2);
     }
 
-    return 0
-  }
+    return 0;
+  };
 
-  const rollInitiative = participant => {
-    const roll = Math.floor(Math.random() * 20) + 1
-    const modifier = getInitiativeModifier(participant)
-    participant.initiativeRoll = roll
-    participant.initiative = roll + modifier
-    return participant.initiative
-  }
+  const rollInitiative = (participant) => {
+    const roll = Math.floor(Math.random() * 20) + 1;
+    const modifier = getInitiativeModifier(participant);
+    participant.initiativeRoll = roll;
+    participant.initiative = roll + modifier;
+    return participant.initiative;
+  };
 
-  const createParticipantState = (
-    participant
-  ) => {
-    const speed = getParticipantSpeed(participant)
+  const createParticipantState = (participant) => {
+    const speed = getParticipantSpeed(participant);
 
     const actionSurgeUses =
-      participant.actionSurgeUses ??
-      getActionSurgeUses(participant)
+      participant.actionSurgeUses ?? getActionSurgeUses(participant);
 
     return {
       ...participant,
 
-      faction: participant.faction ?? (
-        participant.type === 'player'
-          ? 'friendly'
-          : participant.type === 'enemy' || participant.type === 'monster'
-            ? 'hostile'
-            : 'neutral'
-      ),
+      faction:
+        participant.faction ??
+        (participant.type === "player"
+          ? "friendly"
+          : participant.type === "enemy" || participant.type === "monster"
+            ? "hostile"
+            : "neutral"),
 
       actionUsed: false,
 
@@ -105,23 +103,17 @@ export const useCombatStore = defineStore('combat', () => {
 
       attackActionActive: false,
       attackActionAttacksUsed: 0,
-      attackActionMaxAttacks:
-        participant.attackActionMaxAttacks ?? 1,
+      attackActionMaxAttacks: participant.attackActionMaxAttacks ?? 1,
 
-      weaponAttackProfile:
-        participant.weaponAttackProfile ?? null,
+      weaponAttackProfile: participant.weaponAttackProfile ?? null,
 
-      weaponId:
-        participant.weaponId ?? null,
+      weaponId: participant.weaponId ?? null,
 
-      weaponAbility:
-        participant.weaponAbility ?? null,
+      weaponAbility: participant.weaponAbility ?? null,
 
-      armorId:
-        participant.armorId ?? null,
+      armorId: participant.armorId ?? null,
 
-      shieldId:
-        participant.shieldId ?? null,
+      shieldId: participant.shieldId ?? null,
 
       actionType: null,
       disengageActive: false,
@@ -129,8 +121,7 @@ export const useCombatStore = defineStore('combat', () => {
       actionSurgeUses,
 
       actionSurgeUsesRemaining:
-        participant.actionSurgeUsesRemaining ??
-        actionSurgeUses,
+        participant.actionSurgeUsesRemaining ?? actionSurgeUses,
 
       actionSurgeUsedThisTurn: false,
 
@@ -138,281 +129,418 @@ export const useCombatStore = defineStore('combat', () => {
 
       initiativeModifier: getInitiativeModifier(participant),
 
-      attackBonus: Number(participant.attackBonus ?? participant.attackModifier ?? 5),
-      damageDice: participant.damageDice ?? participant.damage ?? '1d6',
-      damageBonus: Number(participant.damageBonus ?? participant.damageModifier ?? 2),
+      attackBonus: Number(
+        participant.attackBonus ?? participant.attackModifier ?? 5,
+      ),
+      damageDice: participant.damageDice ?? participant.damage ?? "1d6",
+      damageBonus: Number(
+        participant.damageBonus ?? participant.damageModifier ?? 2,
+      ),
 
-      movementUsed:
-        participant.movementUsed ?? 0,
+      movementUsed: participant.movementUsed ?? 0,
 
-      remainingMovement:
-        participant.remainingMovement ?? speed
-    }
-  }
+      remainingMovement: participant.remainingMovement ?? speed,
 
-  const pendingOpportunityAttacks = ref([])
+      sleepState: participant.sleepState ?? null,
+    };
+  };
+
+  const pendingOpportunityAttacks = ref([]);
+  const turnSequence = ref(0)
 
   const participants = ref(
-    combatTargets.map(target =>
-      createParticipantState(target)
-    )
+    combatTargets.map((target) => createParticipantState(target)),
+  );
+
+  const selectedTargetId = ref(null);
+
+  const pendingAttack = ref(null);
+
+  const combatStarted = ref(false);
+
+  const combatEvents = ref([])
+
+const pushCombatEvent = event => {
+  if (!event) {
+    return null
+  }
+
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+  const combatEvent = {
+    id,
+    type: event.type ?? 'info',
+    title: event.title ?? 'Боевое событие',
+    message: event.message ?? '',
+    detail: event.detail ?? '',
+    duration: Number(event.duration ?? 4200)
+  }
+
+  combatEvents.value.push(combatEvent)
+
+  if (combatEvents.value.length > 20) {
+    combatEvents.value.shift()
+  }
+
+  return combatEvent
+}
+
+const removeCombatEvent = eventId => {
+  combatEvents.value = combatEvents.value.filter(
+    event => event.id !== eventId
   )
+}
 
-  const selectedTargetId = ref(null)
+const clearCombatEvents = () => {
+  combatEvents.value = []
+}
 
-  const pendingAttack = ref(null)
+  const turnIndex = ref(0);
 
-  const combatStarted = ref(false)
-
-  const turnIndex = ref(0)
-
-  const turnOrder = ref([])
+  const turnOrder = ref([]);
 
   // D&D 5e 2014: flanking is an optional DMG rule, not a core PHB rule.
-  const flankingEnabled = ref(false)
-  const roundNumber = ref(1)
+  const flankingEnabled = ref(false);
+  const roundNumber = ref(1);
 
   const targets = computed(() => {
     return participants.value.filter(
-      participant =>
-        participant.type !== 'player'
-    )
-  })
+      (participant) => participant.type !== "player",
+    );
+  });
 
   const selectedTarget = computed(() => {
     if (!selectedTargetId.value) {
-      return null
+      return null;
     }
 
     return (
       participants.value.find(
-        participant =>
-          participant.id ===
-          selectedTargetId.value
+        (participant) => participant.id === selectedTargetId.value,
       ) ?? null
-    )
-  })
+    );
+  });
 
   const currentTurn = computed(() => {
-    return (
-      turnOrder.value[
-        turnIndex.value
-      ] ?? null
-    )
-  })
+    return turnOrder.value[turnIndex.value] ?? null;
+  });
 
   const currentParticipant = computed(() => {
     if (!currentTurn.value) {
-      return null
+      return null;
     }
 
     return (
       participants.value.find(
-        participant =>
-          participant.id ===
-          currentTurn.value
+        (participant) => participant.id === currentTurn.value,
       ) ?? null
-    )
-  })
+    );
+  });
 
   const addParticipant = (participant) => {
-    const index =
-      participants.value.findIndex(
-        item =>
-          item.id === participant.id
-      )
+    const index = participants.value.findIndex(
+      (item) => item.id === participant.id,
+    );
 
     if (index === -1) {
-      const newParticipant =
-        createParticipantState(
-          participant
-        )
+      const newParticipant = createParticipantState(participant);
 
-      participants.value.push(
-        newParticipant
-      )
+      participants.value.push(newParticipant);
 
       if (combatStarted.value && newParticipant.currentHP > 0) {
-        rollInitiative(newParticipant)
+        rollInitiative(newParticipant);
         if (!turnOrder.value.includes(newParticipant.id)) {
-          turnOrder.value.push(newParticipant.id)
+          turnOrder.value.push(newParticipant.id);
         }
       }
 
-      return newParticipant
+      return newParticipant;
     }
 
-    const existing =
-      participants.value[index]
+    const existing = participants.value[index];
 
-    const preserveCombatState =
-      combatStarted.value
+    const preserveCombatState = combatStarted.value;
 
     const newActionSurgeUses =
-      participant.actionSurgeUses ??
-      getActionSurgeUses(participant)
+      participant.actionSurgeUses ?? getActionSurgeUses(participant);
 
     const speed =
-      participant.speed ??
-      existing.speed ??
-      getParticipantSpeed(participant)
+      participant.speed ?? existing.speed ?? getParticipantSpeed(participant);
 
     const updatedParticipant = {
       ...existing,
       ...participant,
 
-      actionUsed: preserveCombatState
-        ? existing.actionUsed
+      actionUsed: preserveCombatState ? existing.actionUsed : false,
+
+      bonusActionUsed: preserveCombatState ? existing.bonusActionUsed : false,
+
+      bonusActionSpellCast: preserveCombatState
+        ? existing.bonusActionSpellCast
         : false,
 
-      bonusActionUsed:
-        preserveCombatState
-          ? existing.bonusActionUsed
-          : false,
+      reactionUsed: preserveCombatState ? existing.reactionUsed : false,
 
-      bonusActionSpellCast:
-        preserveCombatState
-          ? existing.bonusActionSpellCast
-          : false,
+      reactionACBonus: preserveCombatState ? existing.reactionACBonus : 0,
 
-      reactionUsed:
-        preserveCombatState
-          ? existing.reactionUsed
-          : false,
+      attackActionActive: preserveCombatState
+        ? existing.attackActionActive
+        : false,
 
-      reactionACBonus:
-        preserveCombatState
-          ? existing.reactionACBonus
-          : 0,
+      attackActionAttacksUsed: preserveCombatState
+        ? existing.attackActionAttacksUsed
+        : 0,
 
-      attackActionActive:
-        preserveCombatState
-          ? existing.attackActionActive
-          : false,
+      attackActionMaxAttacks: preserveCombatState
+        ? existing.attackActionMaxAttacks
+        : (participant.attackActionMaxAttacks ?? 1),
 
-      attackActionAttacksUsed:
-        preserveCombatState
-          ? existing.attackActionAttacksUsed
-          : 0,
+      actionType: preserveCombatState ? existing.actionType : null,
 
-      attackActionMaxAttacks:
-        preserveCombatState
-          ? existing.attackActionMaxAttacks
-          : participant.attackActionMaxAttacks ??
-            1,
+      disengageActive: preserveCombatState
+        ? (existing.disengageActive ?? false)
+        : false,
 
-      actionType:
-        preserveCombatState
-          ? existing.actionType
-          : null,
-
-      disengageActive:
-        preserveCombatState
-          ? existing.disengageActive ?? false
-          : false,
-
-      actionSurgeUses:
-        existing.actionSurgeUses ??
-        newActionSurgeUses,
+      actionSurgeUses: existing.actionSurgeUses ?? newActionSurgeUses,
 
       actionSurgeUsesRemaining:
-        existing.actionSurgeUsesRemaining ??
-        newActionSurgeUses,
+        existing.actionSurgeUsesRemaining ?? newActionSurgeUses,
 
-      actionSurgeUsedThisTurn:
-        preserveCombatState
-          ? existing.actionSurgeUsedThisTurn
-          : false,
+      actionSurgeUsedThisTurn: preserveCombatState
+        ? existing.actionSurgeUsedThisTurn
+        : false,
 
       speed,
 
       initiativeModifier: getInitiativeModifier(participant),
-      attackBonus: Number(participant.attackBonus ?? participant.attackModifier ?? existing.attackBonus ?? existing.attackModifier ?? 5),
-      damageDice: participant.damageDice ?? participant.damage ?? existing.damageDice ?? existing.damage ?? '1d6',
-      damageBonus: Number(participant.damageBonus ?? participant.damageModifier ?? existing.damageBonus ?? existing.damageModifier ?? 2),
+      attackBonus: Number(
+        participant.attackBonus ??
+          participant.attackModifier ??
+          existing.attackBonus ??
+          existing.attackModifier ??
+          5,
+      ),
+      damageDice:
+        participant.damageDice ??
+        participant.damage ??
+        existing.damageDice ??
+        existing.damage ??
+        "1d6",
+      damageBonus: Number(
+        participant.damageBonus ??
+          participant.damageModifier ??
+          existing.damageBonus ??
+          existing.damageModifier ??
+          2,
+      ),
 
-      movementUsed:
-        preserveCombatState
-          ? existing.movementUsed
-          : 0,
+      movementUsed: preserveCombatState ? existing.movementUsed : 0,
 
-      remainingMovement:
-        preserveCombatState
-          ? existing.remainingMovement
-          : speed,
+      remainingMovement: preserveCombatState
+        ? existing.remainingMovement
+        : speed,
 
-      currentHP:
-        preserveCombatState
-          ? existing.currentHP
-          : participant.currentHP,
+      currentHP: preserveCombatState
+        ? existing.currentHP
+        : participant.currentHP,
 
-      currentSpellSlots:
-        preserveCombatState
-          ? [
-              ...(existing.currentSpellSlots ??
-                [])
-            ]
-          : [
-              ...(participant.currentSpellSlots ??
-                [])
-            ],
+      currentSpellSlots: preserveCombatState
+        ? [...(existing.currentSpellSlots ?? [])]
+        : [...(participant.currentSpellSlots ?? [])],
 
-      initiative:
-        preserveCombatState
-          ? existing.initiative
-          : participant.initiative ?? 0,
+      initiative: preserveCombatState
+        ? existing.initiative
+        : (participant.initiative ?? 0),
 
-      initiativeRoll:
-        preserveCombatState
-          ? existing.initiativeRoll
-          : undefined
-    }
+      initiativeRoll: preserveCombatState ? existing.initiativeRoll : undefined,
 
-    participants.value[index] =
-      updatedParticipant
+      sleepState: preserveCombatState
+        ? (existing.sleepState ?? null)
+        : (participant.sleepState ?? null),
+    };
 
-    return updatedParticipant
-  }
+    participants.value[index] = updatedParticipant;
+
+    return updatedParticipant;
+  };
 
   const addCharacter = (character) => {
-    const participant = createCharacterParticipant(character)
+    const participant = createCharacterParticipant(character);
 
     if (!participant) {
-      return null
+      return null;
     }
 
-    return addParticipant(participant)
-  }
+    return addParticipant(participant);
+  };
 
   const selectTarget = (id) => {
-    const target =
-      participants.value.find(
-        participant =>
-          participant.id === id
-      )
+    const target = participants.value.find(
+      (participant) => participant.id === id,
+    );
 
     if (!target) {
-      return
+      return;
     }
 
     if (target.currentHP <= 0) {
-      return
+      return;
     }
 
-    selectedTargetId.value = id
+    selectedTargetId.value = id;
 
-    pendingAttack.value = null
+    pendingAttack.value = null;
+  };
+
+  const isParticipantIncapacitated = participantId => {
+  const participant =
+    participants.value.find(
+      item => item.id === participantId
+    )
+
+  if (!participant) {
+    return false
   }
 
-  const applyDamage = (
-    targetId,
-    damage
-  ) => {
-    const target =
+  return Boolean(
+    participant.sleepState?.stage === 'incapacitated' ||
+    participant.sleepState?.stage === 'unconscious'
+  )
+}
+
+const applySleepEffect = (
+  targetId,
+  casterId,
+  spellId
+) => {
+  const target =
+    participants.value.find(
+      item => item.id === targetId
+    )
+
+  if (!target || target.currentHP <= 0) {
+    return false
+  }
+
+  target.sleepState = {
+    spellId,
+    casterId,
+    stage: 'incapacitated',
+    appliedTurnSequence: turnSequence.value,
+    pendingSecondSave: false
+  }
+
+  return true
+}
+
+const clearSleepEffect = targetId => {
+  const target =
+    participants.value.find(
+      item => item.id === targetId
+    )
+
+  if (!target) {
+    return false
+  }
+
+  const hadEffect =
+    Boolean(target.sleepState)
+
+  target.sleepState = null
+
+  return hadEffect
+}
+
+const markSleepSecondSavePending =
+  participantId => {
+    const participant =
       participants.value.find(
-        participant =>
-          participant.id === targetId
+        item => item.id === participantId
       )
+
+    if (!participant?.sleepState) {
+      return false
+    }
+
+    if (
+      participant.sleepState.stage !==
+      'incapacitated'
+    ) {
+      return false
+    }
+
+    if (
+      participant.sleepState.appliedTurnSequence >=
+      turnSequence.value
+    ) {
+      return false
+    }
+
+    participant.sleepState.pendingSecondSave =
+      true
+
+    return true
+  }
+
+const setSleepUnconscious =
+  participantId => {
+    const participant =
+      participants.value.find(
+        item => item.id === participantId
+      )
+
+    if (!participant?.sleepState) {
+      return false
+    }
+
+    participant.sleepState.stage =
+      'unconscious'
+
+    participant.sleepState.pendingSecondSave =
+      false
+
+    return true
+  }
+
+const wakeParticipant = (
+  wakerId,
+  targetId
+) => {
+  const waker =
+    participants.value.find(
+      item => item.id === wakerId
+    )
+
+  const target =
+    participants.value.find(
+      item => item.id === targetId
+    )
+
+  if (!waker || !target) {
+    return false
+  }
+
+  if (wakerId === targetId) {
+    return false
+  }
+
+  if (!target.sleepState) {
+    return false
+  }
+
+  if (!useAction(wakerId)) {
+    return false
+  }
+
+  target.sleepState = null
+
+  return true
+}
+
+  const applyDamage = (targetId, damage) => {
+    const target = participants.value.find(
+      participant => participant.id === targetId
+    )
 
     if (!target) {
       return null
@@ -420,302 +548,240 @@ export const useCombatStore = defineStore('combat', () => {
 
     const amount = Math.max(
       0,
-      Number(damage)
+      Number(damage ?? 0)
     )
 
     target.currentHP = Math.max(
       0,
-      target.currentHP - amount
+      Number(target.currentHP ?? target.maxHP ?? 0) - amount
     )
+
+    if (amount > 0) {
+      target.sleepState = null
+    }
 
     return {
       damage: amount,
-
-      currentHP:
-        target.currentHP,
-
-      maxHP:
-        target.maxHP,
-
-      defeated:
-        target.currentHP <= 0
+      currentHP: target.currentHP,
+      maxHP: target.maxHP,
+      defeated: target.currentHP <= 0,
     }
   }
 
   const resetTarget = (targetId) => {
-    const target =
-      participants.value.find(
-        participant =>
-          participant.id === targetId
-      )
+    const target = participants.value.find(
+      (participant) => participant.id === targetId,
+    );
 
     if (!target) {
-      return
+      return;
     }
 
-    target.currentHP =
-      target.maxHP
+    target.currentHP = target.maxHP;
+    target.sleepState = null
 
-    resetTurnActions(target)
-  }
+    resetTurnActions(target);
+  };
 
-  const resetTurnActions = (
-    participant
-  ) => {
+  const resetTurnActions = (participant) => {
     if (!participant) {
-      return
+      return;
     }
 
-    participant.actionUsed = false
+    participant.actionUsed = false;
 
-    participant.bonusActionUsed = false
+    participant.bonusActionUsed = false;
 
-    participant.bonusActionSpellCast =
-      false
+    participant.bonusActionSpellCast = false;
 
-    participant.reactionUsed = false
+    participant.reactionUsed = false;
 
-    clearOpportunityAttacksForParticipant(participant.id)
+    clearOpportunityAttacksForParticipant(participant.id);
 
-    participant.reactionACBonus = 0
+    participant.reactionACBonus = 0;
 
-    participant.attackActionActive =
-      false
+    participant.attackActionActive = false;
 
-    participant.attackActionAttacksUsed =
-      0
+    participant.attackActionAttacksUsed = 0;
 
-    participant.actionType = null
+    participant.actionType = null;
 
-    participant.disengageActive = false
+    participant.disengageActive = false;
 
-    participant.actionSurgeUsedThisTurn =
-      false
+    participant.actionSurgeUsedThisTurn = false;
 
-    participant.movementUsed = 0
+    participant.movementUsed = 0;
 
-    participant.remainingMovement =
-      participant.speed ?? 0
-  }
+    participant.remainingMovement = participant.speed ?? 0;
+  };
 
-  const queueOpportunityAttack = ({
-    attackerId,
-    targetId
-  } = {}) => {
-    const attacker = participants.value.find(
-      item => item.id === attackerId
-    )
-    const target = participants.value.find(
-      item => item.id === targetId
-    )
+  const queueOpportunityAttack = ({ attackerId, targetId } = {}) => {
+    const attacker = participants.value.find((item) => item.id === attackerId);
+    const target = participants.value.find((item) => item.id === targetId);
 
     if (!attacker || !target) {
-      return false
+      return false;
     }
 
     if (attacker.id === target.id) {
-      return false
+      return false;
     }
 
     if (attacker.currentHP <= 0) {
-      return false
+      return false;
     }
 
     if (attacker.reactionUsed) {
-      return false
+      return false;
     }
 
     if (target.currentHP <= 0) {
-      return false
+      return false;
     }
 
     const exists = pendingOpportunityAttacks.value.some(
-      item =>
-        item.attackerId === attackerId &&
-        item.targetId === targetId
-    )
+      (item) => item.attackerId === attackerId && item.targetId === targetId,
+    );
 
     if (exists) {
-      return false
+      return false;
     }
 
     pendingOpportunityAttacks.value.push({
       id: `oa-${attackerId}-${targetId}-${Date.now()}`,
       attackerId,
-      targetId
-    })
+      targetId,
+    });
 
-    return true
-  }
+    return true;
+  };
 
-  const declineOpportunityAttack = opportunityAttackId => {
+  const declineOpportunityAttack = (opportunityAttackId) => {
     const index = pendingOpportunityAttacks.value.findIndex(
-      item => item.id === opportunityAttackId
-    )
+      (item) => item.id === opportunityAttackId,
+    );
 
     if (index < 0) {
-      return false
+      return false;
     }
 
-    pendingOpportunityAttacks.value.splice(index, 1)
-    return true
-  }
+    pendingOpportunityAttacks.value.splice(index, 1);
+    return true;
+  };
 
-  const useOpportunityAttack = opportunityAttackId => {
+  const useOpportunityAttack = (opportunityAttackId) => {
     const pending = pendingOpportunityAttacks.value.find(
-      item => item.id === opportunityAttackId
-    )
+      (item) => item.id === opportunityAttackId,
+    );
 
     if (!pending) {
-      return false
+      return false;
     }
 
     if (!useReaction(pending.attackerId)) {
-      return false
+      return false;
     }
 
-    pendingOpportunityAttacks.value =
-      pendingOpportunityAttacks.value.filter(
-        item => item.id !== opportunityAttackId
-      )
+    pendingOpportunityAttacks.value = pendingOpportunityAttacks.value.filter(
+      (item) => item.id !== opportunityAttackId,
+    );
 
-    return true
-  }
+    return true;
+  };
 
-  const clearOpportunityAttacksForParticipant = participantId => {
-    pendingOpportunityAttacks.value =
-      pendingOpportunityAttacks.value.filter(
-        item =>
-          item.attackerId !== participantId &&
-          item.targetId !== participantId
-      )
-  }
+  const clearOpportunityAttacksForParticipant = (participantId) => {
+    pendingOpportunityAttacks.value = pendingOpportunityAttacks.value.filter(
+      (item) =>
+        item.attackerId !== participantId && item.targetId !== participantId,
+    );
+  };
 
-  const canMove = (
-    participantId,
-    distance
-  ) => {
-    const participant =
-      participants.value.find(
-        item =>
-          item.id === participantId
-      )
+  const canMove = (participantId, distance) => {
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return false
+      return false;
     }
 
-    if (
-      currentTurn.value !==
-      participantId
-    ) {
-      return false
+    if (currentTurn.value !== participantId) {
+      return false;
     }
 
-    if (
-      participant.currentHP <= 0
-    ) {
-      return false
+    if (participant.currentHP <= 0) {
+      return false;
     }
 
-    const amount = Number(distance)
+    const amount = Number(distance);
 
-    if (
-      !Number.isFinite(amount) ||
-      amount <= 0
-    ) {
-      return false
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return false;
     }
 
-    return (
-      amount <=
-      participant.remainingMovement
-    )
-  }
+    return amount <= participant.remainingMovement;
+  };
 
-  const moveParticipant = (
-    participantId,
-    distance
-  ) => {
-    if (
-      !canMove(
-        participantId,
-        distance
-      )
-    ) {
-      return false
+  const moveParticipant = (participantId, distance) => {
+    if (!canMove(participantId, distance)) {
+      return false;
     }
 
-    const participant =
-      participants.value.find(
-        item =>
-          item.id === participantId
-      )
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
-    const amount =
-      Number(distance)
+    const amount = Number(distance);
 
-    participant.movementUsed +=
-      amount
+    participant.movementUsed += amount;
 
-    participant.remainingMovement -=
-      amount
+    participant.remainingMovement -= amount;
 
-    return true
-  }
+    return true;
+  };
 
-  const getRemainingMovement = (
-    participantId
-  ) => {
-    const participant =
-      participants.value.find(
-        item =>
-          item.id === participantId
-      )
+  const getRemainingMovement = (participantId) => {
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return 0
+      return 0;
     }
 
-    return participant.remainingMovement
-  }
+    return participant.remainingMovement;
+  };
 
   // Total movement spent during the current turn.
-  const getMovementUsed = (
-    participantId
-  ) => {
-    const participant =
-      participants.value.find(
-        item => item.id === participantId
-      )
+  const getMovementUsed = (participantId) => {
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return 0
+      return 0;
     }
 
-    return Number(participant.movementUsed ?? 0)
-  }
+    return Number(participant.movementUsed ?? 0);
+  };
 
   // Movement available during the current turn.
   // Dash increases remainingMovement, so this reflects the actual
   // allowance for the current turn rather than only base Speed.
-  const getMovementAllowance = (
-    participantId
-  ) => {
-    const participant =
-      participants.value.find(
-        item => item.id === participantId
-      )
+  const getMovementAllowance = (participantId) => {
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return 0
+      return 0;
     }
 
     return (
       Number(participant.movementUsed ?? 0) +
       Number(participant.remainingMovement ?? 0)
-    )
-  }
+    );
+  };
 
   /*
    * DASH
@@ -729,64 +795,49 @@ export const useCombatStore = defineStore('combat', () => {
    * после Dash = 50
    */
 
-  const canDash = (
-    participantId
-  ) => {
-    const participant =
-      participants.value.find(
-        item =>
-          item.id === participantId
-      )
+  const canDash = (participantId) => {
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return false
+      return false;
     }
 
-    if (
-      currentTurn.value !==
-      participantId
-    ) {
-      return false
+    if (currentTurn.value !== participantId) {
+      return false;
     }
 
-    if (
-      participant.currentHP <= 0
-    ) {
-      return false
+    if (participant.currentHP <= 0) {
+      return false;
     }
 
     if (participant.actionUsed) {
-      return false
+      return false;
     }
 
-    return true
-  }
+    return true;
+  };
 
-  const useDash = (
-    participantId
-  ) => {
-    if (
-      !canDash(participantId)
-    ) {
-      return false
+  const useDash = (participantId) => {
+    if (!canDash(participantId)) {
+      return false;
     }
 
-    const participant =
-      participants.value.find(
-        item =>
-          item.id === participantId
-      )
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return false
+      return false;
     }
 
     /*
      * Dash использует Action
      */
-    participant.actionUsed = true
+    participant.actionUsed = true;
 
-    participant.actionType = 'dash'
+    participant.actionType = "dash";
 
     /*
      * Добавляем ещё одну скорость
@@ -801,671 +852,472 @@ export const useCombatStore = defineStore('combat', () => {
      * было 15 осталось
      * после Dash станет 40
      */
-    participant.remainingMovement +=
-      participant.speed
+    participant.remainingMovement += participant.speed;
 
-    return true
-  }
+    return true;
+  };
 
-  const canDisengage = (
-    participantId
-  ) => {
-    const participant =
-      participants.value.find(
-        item => item.id === participantId
-      )
+  const canDisengage = (participantId) => {
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return false
+      return false;
     }
 
     if (currentTurn.value !== participantId) {
-      return false
+      return false;
     }
 
     if (participant.currentHP <= 0) {
-      return false
+      return false;
     }
 
-    return !participant.actionUsed
-  }
+    return !participant.actionUsed;
+  };
 
-  const useDisengage = (
-    participantId
-  ) => {
+  const useDisengage = (participantId) => {
     if (!canDisengage(participantId)) {
-      return false
+      return false;
     }
 
-    const participant =
-      participants.value.find(
-        item => item.id === participantId
-      )
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return false
+      return false;
     }
 
-    participant.actionUsed = true
-    participant.attackActionActive = false
-    participant.attackActionAttacksUsed = 0
-    participant.actionType = 'disengage'
-    participant.disengageActive = true
+    participant.actionUsed = true;
+    participant.attackActionActive = false;
+    participant.attackActionAttacksUsed = 0;
+    participant.actionType = "disengage";
+    participant.disengageActive = true;
 
-    return true
-  }
+    return true;
+  };
 
-  const useAction = (
-    participantId
-  ) => {
-    const participant =
-      participants.value.find(
-        item =>
-          item.id === participantId
-      )
+  const useAction = (participantId) => {
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return false
+      return false;
     }
 
-    if (
-      participant.actionUsed
-    ) {
-      return false
+    if (participant.actionUsed) {
+      return false;
     }
 
-    if (
-      currentTurn.value !==
-      participantId
-    ) {
-      return false
+    if (currentTurn.value !== participantId) {
+      return false;
     }
 
-    if (
-      participant.currentHP <= 0
-    ) {
-      return false
+    if (participant.currentHP <= 0) {
+      return false;
     }
 
-    participant.actionUsed = true
+    participant.actionUsed = true;
 
-    participant.attackActionActive =
-      false
+    participant.attackActionActive = false;
 
-    participant.attackActionAttacksUsed =
-      0
+    participant.attackActionAttacksUsed = 0;
 
-    participant.actionType =
-      'action'
+    participant.actionType = "action";
 
-    return true
-  }
+    return true;
+  };
 
-  const canUseAttackActionAttack = (
-    participantId
-  ) => {
-    const participant =
-      participants.value.find(
-        item =>
-          item.id === participantId
-      )
+  const canUseAttackActionAttack = (participantId) => {
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return false
+      return false;
     }
 
-    if (
-      currentTurn.value !==
-      participantId
-    ) {
-      return false
+    if (currentTurn.value !== participantId) {
+      return false;
     }
 
-    if (
-      participant.currentHP <= 0
-    ) {
-      return false
+    if (participant.currentHP <= 0) {
+      return false;
     }
 
-    if (
-      !participant.actionUsed
-    ) {
-      return true
+    if (!participant.actionUsed) {
+      return true;
     }
 
-    if (
-      !participant.attackActionActive
-    ) {
-      return false
+    if (!participant.attackActionActive) {
+      return false;
     }
 
     return (
-      participant.attackActionAttacksUsed <
-      participant.attackActionMaxAttacks
-    )
-  }
+      participant.attackActionAttacksUsed < participant.attackActionMaxAttacks
+    );
+  };
 
-  const useAttackActionAttack = (
-    participantId
-  ) => {
-    const participant =
-      participants.value.find(
-        item =>
-          item.id === participantId
-      )
+  const useAttackActionAttack = (participantId) => {
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return false
+      return false;
+    }
+
+    if (currentTurn.value !== participantId) {
+      return false;
+    }
+
+    if (participant.currentHP <= 0) {
+      return false;
+    }
+
+    if (!participant.actionUsed) {
+      participant.actionUsed = true;
+
+      participant.actionType = "attack";
+
+      participant.attackActionActive = true;
+
+      participant.attackActionAttacksUsed = 1;
+
+      return true;
+    }
+
+    if (!participant.attackActionActive) {
+      return false;
     }
 
     if (
-      currentTurn.value !==
-      participantId
+      participant.attackActionAttacksUsed >= participant.attackActionMaxAttacks
     ) {
-      return false
+      return false;
     }
 
-    if (
-      participant.currentHP <= 0
-    ) {
-      return false
-    }
+    participant.attackActionAttacksUsed += 1;
 
-    if (
-      !participant.actionUsed
-    ) {
-      participant.actionUsed = true
+    return true;
+  };
 
-      participant.actionType =
-        'attack'
-
-      participant.attackActionActive =
-        true
-
-      participant.attackActionAttacksUsed =
-        1
-
-      return true
-    }
-
-    if (
-      !participant.attackActionActive
-    ) {
-      return false
-    }
-
-    if (
-      participant.attackActionAttacksUsed >=
-      participant.attackActionMaxAttacks
-    ) {
-      return false
-    }
-
-    participant.attackActionAttacksUsed +=
-      1
-
-    return true
-  }
-
-  const canUseActionSurge = (
-    participantId
-  ) => {
-    const participant =
-      participants.value.find(
-        item =>
-          item.id === participantId
-      )
+  const canUseActionSurge = (participantId) => {
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return false
+      return false;
     }
 
-    if (
-      currentTurn.value !==
-      participantId
-    ) {
-      return false
+    if (currentTurn.value !== participantId) {
+      return false;
     }
 
-    if (
-      participant.currentHP <= 0
-    ) {
-      return false
+    if (participant.currentHP <= 0) {
+      return false;
     }
 
-    if (
-      participant.actionSurgeUsesRemaining <=
-      0
-    ) {
-      return false
+    if (participant.actionSurgeUsesRemaining <= 0) {
+      return false;
     }
 
-    if (
-      participant.actionSurgeUsedThisTurn
-    ) {
-      return false
+    if (participant.actionSurgeUsedThisTurn) {
+      return false;
     }
 
-    return true
-  }
+    return true;
+  };
 
-  const useActionSurge = (
-    participantId
-  ) => {
-    if (
-      !canUseActionSurge(
-        participantId
-      )
-    ) {
-      return false
+  const useActionSurge = (participantId) => {
+    if (!canUseActionSurge(participantId)) {
+      return false;
     }
 
-    const participant =
-      participants.value.find(
-        item =>
-          item.id === participantId
-      )
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return false
+      return false;
     }
 
-    participant.actionSurgeUsesRemaining -=
-      1
+    participant.actionSurgeUsesRemaining -= 1;
 
-    participant.actionSurgeUsedThisTurn =
-      true
+    participant.actionSurgeUsedThisTurn = true;
 
-    if (
-      participant.actionUsed
-    ) {
-      participant.actionUsed = false
+    if (participant.actionUsed) {
+      participant.actionUsed = false;
 
-      participant.attackActionActive =
-        false
+      participant.attackActionActive = false;
 
-      participant.attackActionAttacksUsed =
-        0
+      participant.attackActionAttacksUsed = 0;
 
-      participant.actionType = null
+      participant.actionType = null;
     }
 
-    return true
-  }
+    return true;
+  };
 
-  const useBonusAction = (
-    participantId
-  ) => {
-    const participant =
-      participants.value.find(
-        item =>
-          item.id === participantId
-      )
+  const useBonusAction = (participantId) => {
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return false
+      return false;
     }
 
-    if (
-      participant.bonusActionUsed
-    ) {
-      return false
+    if (participant.bonusActionUsed) {
+      return false;
     }
 
-    if (
-      currentTurn.value !==
-      participantId
-    ) {
-      return false
+    if (currentTurn.value !== participantId) {
+      return false;
     }
 
-    if (
-      participant.currentHP <= 0
-    ) {
-      return false
+    if (participant.currentHP <= 0) {
+      return false;
     }
 
-    participant.bonusActionUsed =
-      true
+    participant.bonusActionUsed = true;
 
-    return true
-  }
+    return true;
+  };
 
-  const useReaction = (
-    participantId
-  ) => {
-    const participant =
-      participants.value.find(
-        item =>
-          item.id === participantId
-      )
+  const useReaction = (participantId) => {
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return false
+      return false;
     }
 
-    if (
-      participant.reactionUsed
-    ) {
-      return false
+    if (participant.reactionUsed) {
+      return false;
     }
 
-    if (
-      participant.currentHP <= 0
-    ) {
-      return false
+    if (participant.currentHP <= 0) {
+      return false;
     }
 
-    participant.reactionUsed =
-      true
+    participant.reactionUsed = true;
 
-    return true
-  }
+    return true;
+  };
 
-  const markBonusActionSpellCast = (
-    participantId
-  ) => {
-    const participant =
-      participants.value.find(
-        item =>
-          item.id === participantId
-      )
+  const markBonusActionSpellCast = (participantId) => {
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return false
+      return false;
     }
 
-    if (
-      !participant.bonusActionUsed
-    ) {
-      return false
+    if (!participant.bonusActionUsed) {
+      return false;
     }
 
-    if (
-      currentTurn.value !==
-      participantId
-    ) {
-      return false
+    if (currentTurn.value !== participantId) {
+      return false;
     }
 
-    if (
-      participant.currentHP <= 0
-    ) {
-      return false
+    if (participant.currentHP <= 0) {
+      return false;
     }
 
-    participant.bonusActionSpellCast =
-      true
+    participant.bonusActionSpellCast = true;
 
-    return true
-  }
+    return true;
+  };
 
-  const setTurnOrder = (
-    order
-  ) => {
+  const setTurnOrder = (order) => {
     if (!Array.isArray(order)) {
-      return false
+      return false;
     }
 
-    turnOrder.value = [
-      ...order
-    ]
+    turnOrder.value = [...order];
 
-    turnIndex.value = 0
+    turnIndex.value = 0;
 
-    return true
-  }
+    return true;
+  };
 
-  const startCombat = (
-    order = []
-  ) => {
-    let combatOrder = order
+  const startCombat = (order = []) => {
+    let combatOrder = order;
 
-    /*
-     * Защита от:
-     *
-     * startCombat(undefined)
-     * startCombat(null)
-     * startCombat({})
-     *
-     * В этом случае строим порядок
-     * автоматически из участников.
-     */
     if (!Array.isArray(combatOrder)) {
-      combatOrder = []
+      combatOrder = [];
     }
 
-    /*
-     * Если порядок не передан,
-     * формируем его самостоятельно.
-     */
-    if (
-      combatOrder.length === 0
-    ) {
+    if (combatOrder.length === 0) {
       const aliveParticipants = participants.value.filter(
-        participant => participant.currentHP > 0
-      )
+        (participant) => participant.currentHP > 0,
+      );
 
-      aliveParticipants.forEach(participant => {
-        rollInitiative(participant)
-      })
+      aliveParticipants.forEach((participant) => {
+        rollInitiative(participant);
+      });
 
       combatOrder = aliveParticipants
         .sort((a, b) => {
           if (b.initiative !== a.initiative) {
-            return b.initiative - a.initiative
+            return b.initiative - a.initiative;
           }
-          return b.initiativeModifier - a.initiativeModifier
+          return b.initiativeModifier - a.initiativeModifier;
         })
-        .map(participant => participant.id)
+        .map((participant) => participant.id);
     }
 
     /*
      * Убираем ID, которых больше
      * нет среди участников.
      */
-    combatOrder =
-      combatOrder.filter(
-        id =>
-          participants.value.some(
-            participant =>
-              participant.id === id &&
-              participant.currentHP > 0
-          )
-      )
+    combatOrder = combatOrder.filter((id) =>
+      participants.value.some(
+        (participant) => participant.id === id && participant.currentHP > 0,
+      ),
+    );
 
-    if (
-      combatOrder.length === 0
-    ) {
-      combatStarted.value = false
+    if (combatOrder.length === 0) {
+      combatStarted.value = false;
 
-      turnOrder.value = []
+      turnOrder.value = [];
 
-      turnIndex.value = 0
+      turnIndex.value = 0;
 
-      return false
+      return false;
     }
 
-    participants.value.forEach(
-      participant => {
-        resetTurnActions(
-          participant
-        )
-      }
-    )
+    participants.value.forEach((participant) => {
+      resetTurnActions(participant);
+    });
 
-    turnOrder.value = [
-      ...combatOrder
-    ]
+    turnOrder.value = [...combatOrder];
 
-    turnIndex.value = 0
-    roundNumber.value = 1
+    turnIndex.value = 0;
+    roundNumber.value = 1;
+    turnSequence.value = 0;
+    
 
-    combatStarted.value = true
-
-    return true
-  }
+    combatStarted.value = true;
+    
+    clearCombatEvents()
+    return true;
+  };
 
   const findNextAliveIndex = () => {
-    if (
-      !turnOrder.value.length
-    ) {
-      return null
+    if (!turnOrder.value.length) {
+      return null;
     }
 
-    for (
-      let offset = 1;
-      offset <=
-      turnOrder.value.length;
-      offset++
-    ) {
-      const index =
-        (
-          turnIndex.value +
-          offset
-        ) %
-        turnOrder.value.length
+    for (let offset = 1; offset <= turnOrder.value.length; offset++) {
+      const index = (turnIndex.value + offset) % turnOrder.value.length;
 
-      const participant =
-        participants.value.find(
-          item =>
-            item.id ===
-            turnOrder.value[index]
-        )
+      const participant = participants.value.find(
+        (item) => item.id === turnOrder.value[index],
+      );
 
-      if (
-        participant &&
-        participant.currentHP > 0
-      ) {
-        return index
+      if (participant && participant.currentHP > 0) {
+        return index;
       }
     }
 
-    return null
-  }
+    return null;
+  };
 
   const findPreviousAliveIndex = () => {
-    if (
-      !turnOrder.value.length
-    ) {
-      return null
+    if (!turnOrder.value.length) {
+      return null;
     }
 
-    for (
-      let offset = 1;
-      offset <=
-      turnOrder.value.length;
-      offset++
-    ) {
+    for (let offset = 1; offset <= turnOrder.value.length; offset++) {
       const index =
-        (
-          turnIndex.value -
-          offset +
-          turnOrder.value.length
-        ) %
-        turnOrder.value.length
+        (turnIndex.value - offset + turnOrder.value.length) %
+        turnOrder.value.length;
 
-      const participant =
-        participants.value.find(
-          item =>
-            item.id ===
-            turnOrder.value[index]
-        )
+      const participant = participants.value.find(
+        (item) => item.id === turnOrder.value[index],
+      );
 
-      if (
-        participant &&
-        participant.currentHP > 0
-      ) {
-        return index
+      if (participant && participant.currentHP > 0) {
+        return index;
       }
     }
 
-    return null
-  }
+    return null;
+  };
 
   const nextTurn = () => {
-    const nextIndex =
-      findNextAliveIndex()
+    const nextIndex = findNextAliveIndex();
 
-    if (
-      nextIndex === null
-    ) {
-      return false
+    if (nextIndex === null) {
+      return false;
     }
 
-    /*
-     * Старый участник больше
-     * не получает временный AC.
-     */
-    const previousParticipant =
-      currentParticipant.value
+    const previousParticipant = currentParticipant.value;
 
-    if (
-      previousParticipant
-    ) {
-      previousParticipant.reactionACBonus =
-        0
+    if (previousParticipant) {
+      previousParticipant.reactionACBonus = 0;
     }
 
     if (nextIndex <= turnIndex.value) {
       roundNumber.value += 1
     }
 
+    turnSequence.value += 1
+
     turnIndex.value =
       nextIndex
 
-    /*
-     * Новый участник получает
-     * полный набор ресурсов хода.
-     */
-    resetTurnActions(
-      currentParticipant.value
-    )
-
-    return true
-  }
-
-  const previousTurn = () => {
-    const previousIndex =
-      findPreviousAliveIndex()
-
-    if (
-      previousIndex === null
-    ) {
-      return false
+    if (previousParticipant) {
+      markSleepSecondSavePending(
+        previousParticipant.id
+      )
     }
 
-    const previousParticipant =
-      currentParticipant.value
+    resetTurnActions(currentParticipant.value);
 
-    if (
-      previousParticipant
-    ) {
-      previousParticipant.reactionACBonus =
-        0
+    return true;
+  };
+
+  const previousTurn = () => {
+    const previousIndex = findPreviousAliveIndex();
+
+    if (previousIndex === null) {
+      return false;
+    }
+
+    const previousParticipant = currentParticipant.value;
+
+    if (previousParticipant) {
+      previousParticipant.reactionACBonus = 0;
     }
 
     if (previousIndex >= turnIndex.value) {
-      roundNumber.value = Math.max(1, roundNumber.value - 1)
+      roundNumber.value = Math.max(1, roundNumber.value - 1);
     }
 
-    turnIndex.value =
-      previousIndex
+    turnIndex.value = previousIndex;
 
-    resetTurnActions(
-      currentParticipant.value
-    )
+    resetTurnActions(currentParticipant.value);
 
-    return true
-  }
+    return true;
+  };
 
-  const getAttackProfile = participantId => {
+  const getAttackProfile = (participantId) => {
     const participant = participants.value.find(
-      item => item.id === participantId
-    )
+      (item) => item.id === participantId,
+    );
 
-    return getParticipantAttackProfile(participant)
-  }
+    return getParticipantAttackProfile(participant);
+  };
 
   const getAttackRangeMode = (attackProfile, distanceFeet) => {
     if (!attackProfile) {
@@ -1473,28 +1325,32 @@ export const useCombatStore = defineStore('combat', () => {
         valid: false,
         ranged: false,
         longRange: false,
-        reason: 'weapon-unavailable'
-      }
+        reason: "weapon-unavailable",
+      };
     }
 
-    const distance = Number(distanceFeet ?? 0)
+    const distance = Number(distanceFeet ?? 0);
 
-    if (!attackProfile.isRanged && attackProfile.isThrown && distance > attackProfile.reach) {
+    if (
+      !attackProfile.isRanged &&
+      attackProfile.isThrown &&
+      distance > attackProfile.reach
+    ) {
       if (distance <= attackProfile.longRange) {
         return {
           valid: true,
           ranged: true,
           longRange: distance > attackProfile.normalRange,
-          reason: null
-        }
+          reason: null,
+        };
       }
 
       return {
         valid: false,
         ranged: true,
         longRange: true,
-        reason: 'out-of-range'
-      }
+        reason: "out-of-range",
+      };
     }
 
     if (attackProfile.isRanged) {
@@ -1503,16 +1359,16 @@ export const useCombatStore = defineStore('combat', () => {
           valid: false,
           ranged: true,
           longRange: true,
-          reason: 'out-of-range'
-        }
+          reason: "out-of-range",
+        };
       }
 
       return {
         valid: true,
         ranged: true,
         longRange: distance > attackProfile.normalRange,
-        reason: null
-      }
+        reason: null,
+      };
     }
 
     if (distance > attackProfile.reach) {
@@ -1520,142 +1376,142 @@ export const useCombatStore = defineStore('combat', () => {
         valid: false,
         ranged: false,
         longRange: false,
-        reason: 'out-of-reach'
-      }
+        reason: "out-of-reach",
+      };
     }
 
     return {
       valid: true,
       ranged: false,
       longRange: false,
-      reason: null
-    }
-  }
+      reason: null,
+    };
+  };
 
   const canMakeWeaponAttack = (attackerId, targetId, attackContext = {}) => {
-    const attacker = participants.value.find(item => item.id === attackerId)
-    const target = participants.value.find(item => item.id === targetId)
+    const attacker = participants.value.find((item) => item.id === attackerId);
+    const target = participants.value.find((item) => item.id === targetId);
 
     if (!attacker || !target) {
-      return { allowed: false, reason: 'participant-not-found' }
+      return { allowed: false, reason: "participant-not-found" };
     }
 
     if (target.currentHP <= 0) {
-      return { allowed: false, reason: 'target-unconscious' }
+      return { allowed: false, reason: "target-unconscious" };
     }
 
     if (attacker.currentHP <= 0) {
-      return { allowed: false, reason: 'attacker-unconscious' }
+      return { allowed: false, reason: "attacker-unconscious" };
+    }
+
+    if (isParticipantIncapacitated(attackerId)) {
+      return {
+        allowed: false,
+        reason: 'attacker-incapacitated'
+      }
     }
 
     if (currentTurn.value !== attackerId) {
-      return { allowed: false, reason: 'not-current-turn' }
+      return { allowed: false, reason: "not-current-turn" };
     }
 
     if (!canUseAttackActionAttack(attackerId)) {
-      return { allowed: false, reason: 'attack-action-unavailable' }
+      return { allowed: false, reason: "attack-action-unavailable" };
     }
 
-    const attackProfile = getAttackProfile(attackerId)
+    const attackProfile = getAttackProfile(attackerId);
     const range = getAttackRangeMode(
       attackProfile,
-      attackContext.distanceFeet ?? 0
-    )
+      attackContext.distanceFeet ?? 0,
+    );
 
     if (!range.valid) {
-      return { allowed: false, reason: range.reason }
+      return { allowed: false, reason: range.reason };
     }
 
     if (attackContext.lineOfSight === false) {
-      return { allowed: false, reason: 'line-of-sight-blocked' }
+      return { allowed: false, reason: "line-of-sight-blocked" };
     }
 
-    if (attackContext.cover === 'total') {
-      return { allowed: false, reason: 'total-cover' }
+    if (attackContext.cover === "total") {
+      return { allowed: false, reason: "total-cover" };
     }
 
-    const disadvantageSources = [
-      ...(attackContext.disadvantageSources ?? [])
-    ]
+    const disadvantageSources = [...(attackContext.disadvantageSources ?? [])];
 
-    if (range.ranged && attackContext.withinFiveFeetOfHostile && !disadvantageSources.includes('hostile-within-5-feet')) {
-      disadvantageSources.push('hostile-within-5-feet')
+    if (
+      range.ranged &&
+      attackContext.withinFiveFeetOfHostile &&
+      !disadvantageSources.includes("hostile-within-5-feet")
+    ) {
+      disadvantageSources.push("hostile-within-5-feet");
     }
 
-    if (range.longRange && !disadvantageSources.includes('long-range')) {
-      disadvantageSources.push('long-range')
+    if (range.longRange && !disadvantageSources.includes("long-range")) {
+      disadvantageSources.push("long-range");
     }
 
     return {
       allowed: true,
       attackProfile,
       range,
-      disadvantageSources
-    }
-  }
+      disadvantageSources,
+    };
+  };
 
   const resolveWeaponAttack = ({
     attackerId,
     targetId,
-    attackContext = {}
+    attackContext = {},
   } = {}) => {
-    const check = canMakeWeaponAttack(
-      attackerId,
-      targetId,
-      attackContext
-    )
+    const check = canMakeWeaponAttack(attackerId, targetId, attackContext);
 
     if (!check.allowed) {
       return {
         success: false,
-        reason: check.reason
-      }
+        reason: check.reason,
+      };
     }
 
-    const attacker = participants.value.find(item => item.id === attackerId)
-    const target = participants.value.find(item => item.id === targetId)
-    const attackProfile = check.attackProfile
+    const attacker = participants.value.find((item) => item.id === attackerId);
+    const target = participants.value.find((item) => item.id === targetId);
+    const attackProfile = check.attackProfile;
 
-    const advantageSources = [
-      ...(attackContext.advantageSources ?? [])
-    ]
+    const advantageSources = [...(attackContext.advantageSources ?? [])];
     const disadvantageSources = [
-      ...(check.disadvantageSources ?? attackContext.disadvantageSources ?? [])
-    ]
+      ...(check.disadvantageSources ?? attackContext.disadvantageSources ?? []),
+    ];
 
-    const mode = resolveRollMode(
-      advantageSources,
-      disadvantageSources
-    )
+    const mode = resolveRollMode(advantageSources, disadvantageSources);
 
     if (!useAttackActionAttack(attackerId)) {
       return {
         success: false,
-        reason: 'attack-action-unavailable'
-      }
+        reason: "attack-action-unavailable",
+      };
     }
 
-    const roll = rollD20ByMode(mode)
-    const d20 = roll.roll
-    const coverBonus = getCoverACBonus(attackContext.cover)
-    const baseTargetAC = getEffectiveArmorClass(targetId)
-    const targetAC = baseTargetAC + coverBonus
-    const total = d20 + Number(attackProfile.attackModifier ?? 0)
-    const critical = d20 === 20
-    const naturalOne = d20 === 1
-    const hit = critical || (!naturalOne && total >= targetAC)
+    const roll = rollD20ByMode(mode);
+    const d20 = roll.roll;
+    const coverBonus = getCoverACBonus(attackContext.cover);
+    const baseTargetAC = getEffectiveArmorClass(targetId);
+    const targetAC = baseTargetAC + coverBonus;
+    const total = d20 + Number(attackProfile.attackModifier ?? 0);
+    const critical = d20 === 20;
+    const naturalOne = d20 === 1;
+    const hit = critical || (!naturalOne && total >= targetAC);
 
-    let damage = null
+    let damage = null;
 
     if (hit) {
       damage = rollWeaponDamage(
         attackProfile.weapon.damage,
         attackProfile.damageModifier,
         critical,
-        attackProfile.weapon.id === 'unarmed-strike'
-      )
+        attackProfile.weapon.id === "unarmed-strike",
+      );
 
-      applyDamage(targetId, damage.total)
+      applyDamage(targetId, damage.total);
     }
 
     return {
@@ -1685,56 +1541,49 @@ export const useCombatStore = defineStore('combat', () => {
       attacksUsed: attacker.attackActionAttacksUsed,
       attacksRemaining: Math.max(
         0,
-        attacker.attackActionMaxAttacks - attacker.attackActionAttacksUsed
-      )
-    }
-  }
+        attacker.attackActionMaxAttacks - attacker.attackActionAttacksUsed,
+      ),
+    };
+  };
 
   const canMakeBasicAttack = (attackerId, targetId, attackContext = null) => {
-    return canMakeWeaponAttack(
-      attackerId,
-      targetId,
-      attackContext ?? {}
-    ).allowed
-  }
+    return canMakeWeaponAttack(attackerId, targetId, attackContext ?? {})
+      .allowed;
+  };
 
   const resolveBasicAttack = ({
     attackerId,
     targetId,
     advantage = false,
     disadvantage = false,
-    attackContext = null
+    attackContext = null,
   } = {}) => {
     const context = {
       ...(attackContext ?? {}),
       advantageSources: [
         ...(attackContext?.advantageSources ?? []),
-        ...(advantage ? ['legacy-advantage'] : [])
+        ...(advantage ? ["legacy-advantage"] : []),
       ],
       disadvantageSources: [
         ...(attackContext?.disadvantageSources ?? []),
-        ...(disadvantage ? ['legacy-disadvantage'] : [])
-      ]
-    }
+        ...(disadvantage ? ["legacy-disadvantage"] : []),
+      ],
+    };
 
     return resolveWeaponAttack({
       attackerId,
       targetId,
-      attackContext: context
-    })
-  }
+      attackContext: context,
+    });
+  };
 
-  const setPendingAttack = (
-    attack
-  ) => {
-    pendingAttack.value =
-      attack
-  }
+  const setPendingAttack = (attack) => {
+    pendingAttack.value = attack;
+  };
 
   const clearPendingAttack = () => {
-    pendingAttack.value =
-      null
-  }
+    pendingAttack.value = null;
+  };
 
   const createPendingAttack = ({
     attackerId,
@@ -1743,33 +1592,22 @@ export const useCombatStore = defineStore('combat', () => {
     attackModifier,
     targetAC,
     hit,
-    critical
+    critical,
   }) => {
-    const attacker =
-      participants.value.find(
-        participant =>
-          participant.id ===
-          attackerId
-      )
+    const attacker = participants.value.find(
+      (participant) => participant.id === attackerId,
+    );
 
-    const target =
-      participants.value.find(
-        participant =>
-          participant.id ===
-          targetId
-      )
+    const target = participants.value.find(
+      (participant) => participant.id === targetId,
+    );
 
-    if (
-      !attacker ||
-      !target
-    ) {
-      return false
+    if (!attacker || !target) {
+      return false;
     }
 
-    if (
-      target.currentHP <= 0
-    ) {
-      return false
+    if (target.currentHP <= 0) {
+      return false;
     }
 
     pendingAttack.value = {
@@ -1779,223 +1617,236 @@ export const useCombatStore = defineStore('combat', () => {
       attackModifier,
       targetAC,
       hit,
-      critical
-    }
+      critical,
+    };
 
-    return true
-  }
+    return true;
+  };
 
   const resolvePendingAttack = () => {
-    const attack =
-      pendingAttack.value
+    const attack = pendingAttack.value;
 
     if (!attack) {
-      return null
+      return null;
     }
 
-    const target =
-      participants.value.find(
-        participant =>
-          participant.id ===
-          attack.targetId
-      )
+    const target = participants.value.find(
+      (participant) => participant.id === attack.targetId,
+    );
 
     if (!target) {
-      pendingAttack.value =
-        null
+      pendingAttack.value = null;
 
-      return null
+      return null;
     }
 
-    pendingAttack.value =
-      null
+    pendingAttack.value = null;
 
     return {
       ...attack,
 
-      targetCurrentHP:
-        target.currentHP
-    }
-  }
+      targetCurrentHP: target.currentHP,
+    };
+  };
 
-  const setReactionACBonus = (
-    participantId,
-    bonus
-  ) => {
-    const participant =
-      participants.value.find(
-        item =>
-          item.id === participantId
-      )
+  const setReactionACBonus = (participantId, bonus) => {
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return false
+      return false;
     }
 
-    participant.reactionACBonus =
-      Number(bonus) || 0
+    participant.reactionACBonus = Number(bonus) || 0;
 
-    return true
-  }
+    return true;
+  };
 
-  const getEffectiveArmorClass = (
-    participantId
-  ) => {
-    const participant =
-      participants.value.find(
-        item =>
-          item.id === participantId
-      )
+  const getEffectiveArmorClass = (participantId) => {
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return 0
+      return 0;
     }
 
-    return (
-      participant.armorClass +
-      (
-        participant.reactionACBonus ??
-        0
-      )
-    )
-  }
+    return participant.armorClass + (participant.reactionACBonus ?? 0);
+  };
 
-  const setFlankingEnabled = enabled => {
-    flankingEnabled.value = Boolean(enabled)
-    return flankingEnabled.value
-  }
+  const setFlankingEnabled = (enabled) => {
+    flankingEnabled.value = Boolean(enabled);
+    return flankingEnabled.value;
+  };
 
   const toggleFlanking = () => {
-    flankingEnabled.value = !flankingEnabled.value
-    return flankingEnabled.value
-  }
+    flankingEnabled.value = !flankingEnabled.value;
+    return flankingEnabled.value;
+  };
 
   const endCombat = () => {
-    combatStarted.value =
-      false
-
-    turnOrder.value = []
-
-    turnIndex.value = 0
-    roundNumber.value = 1
-
-    selectedTargetId.value =
-      null
-
-    pendingAttack.value =
-      null
-  }
-
-  const resetCombat = () => {
     participants.value.forEach(
       participant => {
-        participant.currentHP =
-          participant.maxHP
-
-        participant.actionSurgeUsesRemaining =
-          participant.actionSurgeUses
-
-        resetTurnActions(
-          participant
-        )
+        participant.sleepState = null
       }
     )
 
-    combatStarted.value =
-      false
+    combatStarted.value = false;
 
-    turnOrder.value = []
+    turnOrder.value = [];
 
-    turnIndex.value = 0
-    roundNumber.value = 1
+    turnIndex.value = 0;
+    roundNumber.value = 1;
+    turnSequence.value = 0
 
-    selectedTargetId.value =
-      null
+    selectedTargetId.value = null;
 
-    pendingAttack.value =
-      null
-  }
+    pendingAttack.value = null;
+    
+    clearCombatEvents()
+  };
 
-  const canUseSpellSlot = (
-    participantId,
-    level
-  ) => {
+  const resetCombat = () => {
+    participants.value.forEach((participant) => {
+      participant.currentHP = participant.maxHP;
+      participant.sleepState = null
+
+      participant.actionSurgeUsesRemaining = participant.actionSurgeUses;
+
+      resetTurnActions(participant);
+    });
+
+    combatStarted.value = false;
+
+    turnOrder.value = [];
+
+    turnIndex.value = 0;
+    roundNumber.value = 1;
+    turnSequence.value = 0
+
+    selectedTargetId.value = null;
+
+    pendingAttack.value = null;
+  };
+
+  const canUseSpellSlot = (participantId, level) => {
     if (level < 1) {
-      return false
+      return false;
     }
 
-    const participant =
-      participants.value.find(
-        item =>
-          item.id === participantId
-      )
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return false
+      return false;
     }
 
-    return (
-      participant
-        .currentSpellSlots?.[
-          level - 1
-        ] ?? 0
-    ) > 0
-  }
+    return (participant.currentSpellSlots?.[level - 1] ?? 0) > 0;
+  };
 
-  const useSpellSlot = (
-    participantId,
-    level
-  ) => {
-    if (
-      !canUseSpellSlot(
-        participantId,
-        level
-      )
-    ) {
-      return false
+  const useSpellSlot = (participantId, level) => {
+    if (!canUseSpellSlot(participantId, level)) {
+      return false;
     }
 
-    const participant =
-      participants.value.find(
-        item =>
-          item.id === participantId
-      )
+    const participant = participants.value.find(
+      (item) => item.id === participantId,
+    );
 
     if (!participant) {
-      return false
+      return false;
     }
 
-    const index =
-      level - 1
+    const index = level - 1;
 
-    participant.currentSpellSlots[
-      index
-    ] = Math.max(
+    participant.currentSpellSlots[index] = Math.max(
       0,
-      participant
-        .currentSpellSlots[index] - 1
-    )
+      participant.currentSpellSlots[index] - 1,
+    );
 
-    return true
-  }
+    return true;
+  };
 
   const enemyPresets = {
-    goblin: { id: 'goblin', name: 'Гоблин', type: 'enemy', faction: 'enemy', maxHP: 7, currentHP: 7, armorClass: 15, speed: 30, initiativeModifier: 2, attackBonus: 4, damageDice: '1d6', damageBonus: 2 },
-    orc: { id: 'orc', name: 'Орк', type: 'enemy', faction: 'enemy', maxHP: 15, currentHP: 15, armorClass: 13, speed: 30, initiativeModifier: 1, attackBonus: 5, damageDice: '1d12', damageBonus: 3 },
-    skeleton: { id: 'skeleton', name: 'Скелет', type: 'enemy', faction: 'enemy', maxHP: 13, currentHP: 13, armorClass: 13, speed: 30, initiativeModifier: 2, attackBonus: 4, damageDice: '1d6', damageBonus: 2 }
-  }
+    goblin: {
+      id: "goblin",
+      name: "Гоблин",
+      type: "enemy",
+      faction: "enemy",
+      maxHP: 7,
+      currentHP: 7,
+      armorClass: 15,
+      speed: 30,
+      initiativeModifier: 2,
+      attackBonus: 4,
+      damageDice: "1d6",
+      damageBonus: 2,
+    },
+    orc: {
+      id: "orc",
+      name: "Орк",
+      type: "enemy",
+      faction: "enemy",
+      maxHP: 15,
+      currentHP: 15,
+      armorClass: 13,
+      speed: 30,
+      initiativeModifier: 1,
+      attackBonus: 5,
+      damageDice: "1d12",
+      damageBonus: 3,
+    },
+    skeleton: {
+      id: "skeleton",
+      name: "Скелет",
+      type: "enemy",
+      faction: "enemy",
+      maxHP: 13,
+      currentHP: 13,
+      armorClass: 13,
+      speed: 30,
+      initiativeModifier: 2,
+      attackBonus: 4,
+      damageDice: "1d6",
+      damageBonus: 2,
+    },
+  };
 
-  const addEnemyPreset = presetId => {
-    const preset = enemyPresets[presetId]
-    if (!preset) return null
-    const count = participants.value.filter(item => item.enemyPreset === presetId).length + 1
-    return addParticipant({ ...preset, id: `${presetId}-${Date.now()}-${count}`, enemyPreset: presetId, name: count > 1 ? `${preset.name} ${count}` : preset.name })
-  }
+  const addEnemyPreset = (presetId) => {
+    const preset = enemyPresets[presetId];
+    if (!preset) return null;
+    const count =
+      participants.value.filter((item) => item.enemyPreset === presetId)
+        .length + 1;
+    return addParticipant({
+      ...preset,
+      id: `${presetId}-${Date.now()}-${count}`,
+      enemyPreset: presetId,
+      name: count > 1 ? `${preset.name} ${count}` : preset.name,
+    });
+  };
 
   const addTestPlayer = () => {
-    const count = participants.value.filter(item => item.type === 'player').length + 1
-    return addParticipant({ id: `test-player-${Date.now()}-${count}`, name: count > 1 ? `Игрок ${count}` : 'Тестовый герой', type: 'player', faction: 'friendly', level: 1, maxHP: 12, currentHP: 12, armorClass: 16, speed: 30, initiativeModifier: 2, attackBonus: 5, damageDice: '1d8', damageBonus: 3 })
-  }
+    const count =
+      participants.value.filter((item) => item.type === "player").length + 1;
+    return addParticipant({
+      id: `test-player-${Date.now()}-${count}`,
+      name: count > 1 ? `Игрок ${count}` : "Тестовый герой",
+      type: "player",
+      faction: "friendly",
+      level: 1,
+      maxHP: 12,
+      currentHP: 12,
+      armorClass: 16,
+      speed: 30,
+      initiativeModifier: 2,
+      attackBonus: 5,
+      damageDice: "1d8",
+      damageBonus: 3,
+    });
+  };
 
   return {
     participants,
@@ -2003,6 +1854,11 @@ export const useCombatStore = defineStore('combat', () => {
     targets,
 
     selectedTargetId,
+
+    combatEvents,
+    pushCombatEvent,
+    removeCombatEvent,
+    clearCombatEvents,
 
     selectedTarget,
 
@@ -2028,6 +1884,13 @@ export const useCombatStore = defineStore('combat', () => {
     selectTarget,
 
     applyDamage,
+
+    isParticipantIncapacitated,
+    applySleepEffect,
+    clearSleepEffect,
+    markSleepSecondSavePending,
+    setSleepUnconscious,
+    wakeParticipant,
 
     resetTarget,
 
@@ -2100,6 +1963,6 @@ export const useCombatStore = defineStore('combat', () => {
 
     createPendingAttack,
 
-    resolvePendingAttack
-  }
-})
+    resolvePendingAttack,
+  };
+});

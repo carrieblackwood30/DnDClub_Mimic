@@ -7,8 +7,13 @@ import { useDice } from '~/composables/useDice'
 
 import { reactions } from '~/data/reactions'
 
+import { useCombatSpellcasting } from '~/composables/useCombatSpellcasting'
+
 export const useCombat = () => {
   const combatStore = useCombatStore()
+  const {
+    processPendingSleepSaves
+  } = useCombatSpellcasting()
   const {
     participants,
     currentTurn,
@@ -212,9 +217,15 @@ export const useCombat = () => {
   }
 
   const nextTurn = () => {
-    combatStore.nextTurn()
-  }
+    const changed =
+      combatStore.nextTurn()
 
+    if (changed) {
+      processPendingSleepSaves()
+    }
+
+    return changed
+  }
   const previousTurn = () => {
     combatStore.previousTurn()
   }
