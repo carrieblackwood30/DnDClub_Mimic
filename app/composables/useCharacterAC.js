@@ -1,4 +1,7 @@
 import { computed } from 'vue'
+import {
+  getAbilityModifier
+} from '~/domain/character/statRules'
 
 export const useCharacterAC = () => {
   const characterCreator = useCharacterCreatorStore()
@@ -31,10 +34,9 @@ export const useCharacterAC = () => {
   })
 
   const dexterityModifier = computed(() => {
-    const dexterity =
-      abilityScores.value.dexterity ?? 10
-
-    return Math.floor((dexterity - 10) / 2)
+    return getAbilityModifier(
+      abilityScores.value.dexterity
+    )
   })
 
   const armorClass = computed(() => {

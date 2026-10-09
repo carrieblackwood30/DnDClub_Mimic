@@ -1,4 +1,7 @@
 import { computed } from 'vue'
+import {
+  getMaxHitPoints
+} from '~/domain/character/hitPointsRules'
 
 export const useCharacterHP = () => {
   const characterCreator = useCharacterCreatorStore()
@@ -11,31 +14,12 @@ export const useCharacterHP = () => {
   })
 
   const maxHitPoints = computed(() => {
-    if (!hitDie.value) {
-      return 0
-    }
-
-    const level = characterCreator.level
-    const constitution = constitutionModifier.value
-
-    const firstLevelHP = Math.max(
-      1,
-      hitDie.value + constitution
-    )
-
-    if (level === 1) {
-      return firstLevelHP
-    }
-
-    const hitDieAverage =
-      Math.floor(hitDie.value / 2) + 1
-
-    const hpPerLevel = Math.max(
-      1,
-      hitDieAverage + constitution
-    )
-
-    return firstLevelHP + hpPerLevel * (level - 1)
+    return getMaxHitPoints({
+      level: characterCreator.level,
+      hitDie: hitDie.value,
+      constitutionModifier:
+        constitutionModifier.value
+    })
   })
 
   return {

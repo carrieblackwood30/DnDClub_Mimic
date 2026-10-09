@@ -11,6 +11,7 @@ import {
 import { isSpellAvailableToClass } from '~/domain/spells/spellAvailability'
 import { useCharacterCreatorStore } from '~/stores/characterCreator'
 import { useCharacterStats } from '~/composables/useCharacterStats'
+import { useCharacterProficiency } from '~/composables/useCharacterProficiency'
 import { useClassesStore } from '~/stores/classes'
 
 export const useCharacterSpellcasting = () => {
@@ -20,8 +21,14 @@ export const useCharacterSpellcasting = () => {
   const classesStore =
     useClassesStore()
 
-  const { abilityScores } =
-    useCharacterStats()
+  const {
+    abilityScores,
+    abilityModifiers
+  } = useCharacterStats()
+
+  const {
+    proficiencyBonus
+  } = useCharacterProficiency()
 
   const characterClass = computed(() => {
     return characterCreator.classId
@@ -66,23 +73,16 @@ export const useCharacterSpellcasting = () => {
 
   const spellcastingAbilityModifier =
     computed(() => {
-      return Math.floor(
-        (
-          spellcastingAbilityScore.value -
-          10
-        ) / 2
+      if (!spellcastingAbility.value) {
+        return 0
+      }
+
+      return (
+        abilityModifiers.value[
+          spellcastingAbility.value
+        ] ?? 0
       )
     })
-
-  const proficiencyBonus = computed(() => {
-    return (
-      Math.floor(
-        (
-          characterCreator.level - 1
-        ) / 4
-      ) + 2
-    )
-  })
 
   const spellSaveDC = computed(() => {
     if (!canCastSpells.value) {

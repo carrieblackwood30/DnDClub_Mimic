@@ -1,12 +1,15 @@
 import { computed } from 'vue'
+import {
+  getProficiencyBonus
+} from '~/domain/character/statRules'
 
 export const useCharacterProficiency = () => {
   const characterCreator = useCharacterCreatorStore()
 
   const proficiencyBonus = computed(() => {
-    return Math.floor(
-      (characterCreator.level - 1) / 4
-    ) + 2
+    return getProficiencyBonus(
+      characterCreator.level
+    )
   })
 
   return {

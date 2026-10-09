@@ -1,4 +1,7 @@
 import { computed } from 'vue'
+import {
+  getAbilityModifiers
+} from '~/domain/character/statRules'
 
 export const useCharacterStats = () => {
   const characterCreator = useCharacterCreatorStore()
@@ -48,15 +51,9 @@ export const useCharacterStats = () => {
   })
 
   const abilityModifiers = computed(() => {
-    const result = {}
-
-    for (const [ability, score] of Object.entries(
+    return getAbilityModifiers(
       abilityScores.value
-    )) {
-      result[ability] = Math.floor((score - 10) / 2)
-    }
-
-    return result
+    )
   })
 
   return {

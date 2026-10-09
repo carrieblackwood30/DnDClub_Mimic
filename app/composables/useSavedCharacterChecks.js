@@ -1,4 +1,8 @@
 import { useDice } from '~/composables/useDice'
+import {
+  getAbilityModifier,
+  getProficiencyBonus
+} from '~/domain/character/statRules'
 
 export const useSavedCharacterChecks = (
   character,
@@ -13,39 +17,36 @@ export const useSavedCharacterChecks = (
     characterClass
   )
 
-  const getAbilityModifier = (ability) => {
-    const score =
-      character.value?.abilityScores?.[ability] ?? 10
-
-    return Math.floor((score - 10) / 2)
-  }
-
-  const getProficiencyBonus = () => {
-    const level =
-      character.value?.level ?? 1
-
-    return Math.floor((level - 1) / 4) + 2
-  }
+const getCharacterAbilityModifier = (
+  ability
+) => {
+  return getAbilityModifier(
+    character.value?.abilityScores?.[ability] ??
+      10
+  )
+}
 
   const getAbilityCheckModifier = (ability) => {
-    return getAbilityModifier(ability)
+    return getCharacterAbilityModifier(ability)
   }
 
-  const getSavingThrowModifier = (ability) => {
-    const baseModifier =
-      getAbilityModifier(ability)
+const getSavingThrowModifier = (ability) => {
+  const baseModifier =
+    getCharacterAbilityModifier(ability)
 
-    const savingThrowProficiencies =
-      characterClass.value?.savingThrowProficiencies ?? []
+  const savingThrowProficiencies =
+    characterClass.value?.savingThrowProficiencies ?? []
 
-    const isProficient =
-      savingThrowProficiencies.includes(ability)
+  const isProficient =
+    savingThrowProficiencies.includes(ability)
 
-    return baseModifier +
-      (isProficient
-        ? getProficiencyBonus()
-        : 0)
-  }
+  return baseModifier +
+    (isProficient
+      ? getProficiencyBonus(
+          character.value?.level
+        )
+      : 0)
+}
 
   const rollAbilityCheck = (
     ability,

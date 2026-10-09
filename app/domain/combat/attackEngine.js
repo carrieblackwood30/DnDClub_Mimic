@@ -1,31 +1,10 @@
-const parseDice = dice => {
-  const match = String(dice ?? '1d6').match(/^(\d+)d(\d+)$/i)
+import {
+  rollDiceExpression,
+  rollD20ByMode
+} from './diceEngine'
 
-  if (!match) {
-    return {
-      count: 1,
-      sides: 1
-    }
-  }
-
-  return {
-    count: Math.max(1, Number(match[1])),
-    sides: Math.max(1, Number(match[2]))
-  }
-}
-
-const rollDice = dice => {
-  const parsed = parseDice(dice)
-  const rolls = []
-
-  for (let index = 0; index < parsed.count; index += 1) {
-    rolls.push(Math.floor(Math.random() * parsed.sides) + 1)
-  }
-
-  return {
-    rolls,
-    total: rolls.reduce((sum, value) => sum + value, 0)
-  }
+export {
+  rollD20ByMode
 }
 
 export const resolveRollMode = (advantageSources = [], disadvantageSources = []) => {
@@ -42,27 +21,45 @@ export const resolveRollMode = (advantageSources = [], disadvantageSources = [])
   return 'normal'
 }
 
-export const rollD20ByMode = mode => {
-  const first = Math.floor(Math.random() * 20) + 1
+export const resolveAttackOutcome = ({
+  d20,
+  attackModifier = 0,
+  targetAC = 0
+}) => {
+  const roll = Number(d20 ?? 0)
+  const modifier = Number(
+    attackModifier ?? 0
+  )
+  const ac = Number(
+    targetAC ?? 0
+  )
 
-  if (mode === 'normal') {
-    return {
-      rolls: [first],
-      roll: first
-    }
-  }
+  const total =
+    roll + modifier
 
-  const second = Math.floor(Math.random() * 20) + 1
+  const critical =
+    roll === 20
+
+  const criticalFail =
+    roll === 1
+
+  const hit =
+    critical
+      ? true
+      : criticalFail
+        ? false
+        : total >= ac
 
   return {
-    rolls: [first, second],
-    roll: mode === 'advantage'
-      ? Math.max(first, second)
-      : Math.min(first, second)
+    roll,
+    modifier,
+    total,
+    targetAC: ac,
+    hit,
+    critical,
+    criticalFail
   }
 }
-
-
 
 export const getCoverACBonus = cover => {
   if (cover === 'three-quarters') return 5
@@ -79,8 +76,18 @@ export const rollWeaponDamage = (damageDice, damageModifier, critical = false, i
     }
   }
 
-  const first = rollDice(damageDice)
-  const second = critical ? rollDice(damageDice) : null
+const first =
+  rollDiceExpression(
+    damageDice
+  )
+
+const second =
+  critical
+    ? rollDiceExpression(
+        damageDice
+      )
+    : null
+    
   const diceTotal = first.total + (second?.total ?? 0)
 
   return {

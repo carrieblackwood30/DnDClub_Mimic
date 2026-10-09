@@ -5,13 +5,14 @@ import { armors } from '~/data/armors'
 import { shields } from '~/data/shields'
 import { attackProgression } from '~/data/attackProgression'
 
-const getAbilityModifier = score => {
-  return Math.floor((Number(score ?? 10) - 10) / 2)
-}
+import {
+  getAbilityModifier,
+  getProficiencyBonus
+} from '~/domain/character/statRules'
 
-const getProficiencyBonus = level => {
-  return Math.floor((Number(level ?? 1) - 1) / 4) + 2
-}
+import {
+  getMaxHitPoints as calculateMaxHitPoints
+} from '~/domain/character/hitPointsRules'
 
 const getRaceSpeed = character => {
   const race = races.find(item => item.id === character?.raceId)
@@ -46,26 +47,23 @@ const getShieldData = character => {
 
 const getMaxHitPoints = character => {
   const classData = getClassData(character)
-  if (!classData) return Number(character?.maxHP ?? 1)
 
-  const level = Number(character?.level ?? 1)
-  const constitutionModifier = getAbilityModifier(
-    character?.abilityScores?.constitution
-  )
+  if (!classData) {
+    return Number(
+      character?.maxHP ?? 1
+    )
+  }
 
-  const firstLevelHp = Math.max(
-    1,
-    Number(classData.hitDie ?? 0) + constitutionModifier
-  )
+  const constitutionModifier =
+    getAbilityModifier(
+      character?.abilityScores?.constitution
+    )
 
-  if (level === 1) return firstLevelHp
-
-  const hpPerLevel = Math.max(
-    1,
-    Math.floor(Number(classData.hitDie ?? 0) / 2) + 1 + constitutionModifier
-  )
-
-  return firstLevelHp + hpPerLevel * (level - 1)
+  return calculateMaxHitPoints({
+    level: character?.level,
+    hitDie: classData.hitDie,
+    constitutionModifier
+  })
 }
 
 const getArmorClass = character => {

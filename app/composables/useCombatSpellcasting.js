@@ -2,11 +2,19 @@ import { useCombatStore } from '~/stores/combat'
 import { useDice } from '~/composables/useDice'
 import { useClassesStore } from '~/stores/classes'
 import { spells } from '~/data/spells'
+import {
+  getAbilityModifier,
+  getProficiencyBonus as getProficiencyBonusRule
+} from '~/domain/character/statRules'
 
 export const useCombatSpellcasting = () => {
   const combatStore = useCombatStore()
   const classesStore = useClassesStore()
-  const { rollD20, rollDamage } = useDice()
+  const {
+  rollD20,
+  rollD20ByMode,
+  rollDamage
+} = useDice()
 
   const getParticipant = participantId => {
     return combatStore.participants.find(
@@ -130,29 +138,36 @@ export const useCombatSpellcasting = () => {
   }
 
   const getSpellcastingAbilityModifier = participantId => {
-    const participant = getParticipant(participantId)
+    const participant =
+      getParticipant(participantId)
 
-    if (!participant) return 0
+    if (!participant) {
+      return 0
+    }
 
-    const ability = getSpellcastingAbility(participantId)
+    const ability =
+      getSpellcastingAbility(participantId)
 
-    if (!ability) return 0
+    if (!ability) {
+      return 0
+    }
 
-    const score = participant.abilityScores?.[ability] ?? 10
-
-    return Math.floor(
-      (Number(score) - 10) / 2
+    return getAbilityModifier(
+      participant.abilityScores?.[ability]
     )
   }
 
   const getProficiencyBonus = participantId => {
-    const participant = getParticipant(participantId)
+    const participant =
+      getParticipant(participantId)
 
-    if (!participant) return 0
+    if (!participant) {
+      return 0
+    }
 
-    return Math.floor(
-      (Number(participant.level ?? 1) - 1) / 4
-    ) + 2
+    return getProficiencyBonusRule(
+      participant.level
+    )
   }
 
   const getSpellAttackBonus = participantId => {
@@ -551,14 +566,12 @@ export const useCombatSpellcasting = () => {
     target,
     ability
   ) => {
-    if (!target || !ability) return 0
+    if (!target || !ability) {
+      return 0
+    }
 
-    return Math.floor(
-      (
-        Number(
-          target.abilityScores?.[ability] ?? 10
-        ) - 10
-      ) / 2
+    return getAbilityModifier(
+      target.abilityScores?.[ability]
     )
   }
 
@@ -583,9 +596,9 @@ export const useCombatSpellcasting = () => {
       classData?.savingThrowProficiencies ?? []
 
     const proficiencyBonus =
-      Math.floor(
-        (Number(target.level ?? 1) - 1) / 4
-      ) + 2
+      getProficiencyBonusRule(
+        target.level
+      )
 
     const proficient =
       proficiencies.includes(ability)
@@ -604,37 +617,6 @@ export const useCombatSpellcasting = () => {
     return combatStore.getEffectiveArmorClass(
       participantId
     )
-  }
-
-  const rollD20ByMode = (
-    advantage = false,
-    disadvantage = false
-  ) => {
-    const first = rollD20()
-
-    if (advantage === disadvantage) {
-      return {
-        roll: first,
-        rolls: [first],
-        mode: 'normal'
-      }
-    }
-
-    const second = rollD20()
-
-    if (advantage) {
-      return {
-        roll: Math.max(first, second),
-        rolls: [first, second],
-        mode: 'advantage'
-      }
-    }
-
-    return {
-      roll: Math.min(first, second),
-      rolls: [first, second],
-      mode: 'disadvantage'
-    }
   }
 
   const getSpellAttackModifiers = (
@@ -743,10 +725,19 @@ export const useCombatSpellcasting = () => {
       modifiers.disadvantage = true
     }
 
+    const rollMode =
+      modifiers.advantage &&
+      modifiers.disadvantage
+        ? 'normal'
+        : modifiers.advantage
+          ? 'advantage'
+          : modifiers.disadvantage
+            ? 'disadvantage'
+            : 'normal'
+
     const rollResult =
       rollD20ByMode(
-        modifiers.advantage,
-        modifiers.disadvantage
+        rollMode
       )
 
     const roll = rollResult.roll

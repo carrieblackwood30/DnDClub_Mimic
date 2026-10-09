@@ -1,41 +1,45 @@
 import { computed } from 'vue'
+import {
+  getAbilityModifier
+} from '~/domain/character/statRules'
+import {
+  getMaxHitPoints
+} from '~/domain/character/hitPointsRules'
 
 export const useSavedCharacterHP = (character, characterClass) => {
-  const maxHitPoints = computed(() => {
-    if (!character.value || !characterClass.value) {
-      return 0
-    }
+const maxHitPoints = computed(() => {
+  const characterValue =
+    character.value
 
-    const level = character.value.level ?? 1
-    const hitDie = characterClass.value.hitDie ?? 0
+  const classValue =
+    characterClass.value
 
-    const constitutionScore =
-      character.value.abilityScores?.constitution ?? 10
+  if (
+    !characterValue ||
+    !classValue
+  ) {
+    return 0
+  }
 
-    const constitutionModifier =
-      Math.floor((constitutionScore - 10) / 2)
+  return getMaxHitPoints({
+    level:
+      characterValue.level,
 
-    const firstLevelHP =
-      Math.max(1, hitDie + constitutionModifier)
+    hitDie:
+      classValue.hitDie,
 
-    if (level === 1) {
-      return firstLevelHP
-    }
+    constitutionModifier:
+      getAbilityModifier(
+        characterValue
+          .abilityScores
+          ?.constitution ?? 10
+      ),
 
-    const hitDieAverage =
-      Math.floor(hitDie / 2) + 1
-
-    const hpPerLevel =
-      Math.max(
-        1,
-        hitDieAverage + constitutionModifier
-      )
-
-    return (
-      firstLevelHP +
-      hpPerLevel * (level - 1)
-    )
+    hitPointRolls:
+      characterValue
+        .hitPointRolls ?? {}
   })
+})
 
   return {
     maxHitPoints

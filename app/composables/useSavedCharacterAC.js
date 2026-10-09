@@ -1,4 +1,7 @@
 import { computed } from 'vue'
+import {
+  getAbilityModifier
+} from '~/domain/character/statRules'
 
 export const useSavedCharacterAC = (character, armor, shield) => {
   const armorClass = computed(() => {
@@ -8,7 +11,7 @@ export const useSavedCharacterAC = (character, armor, shield) => {
       character.value.abilityScores?.dexterity ?? 10
 
     const dexterityModifier =
-      Math.floor((dexterityScore - 10) / 2)
+      getAbilityModifier(dexterityScore)
 
     let ac = 10
 

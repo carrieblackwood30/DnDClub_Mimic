@@ -1,4 +1,8 @@
 import { computed } from 'vue'
+import {
+  getAbilityModifier,
+  getProficiencyBonus
+} from '~/domain/character/statRules'
 
 export const useSavedCharacterSaves = (character, characterClass) => {
   const savingThrows = computed(() => {
@@ -6,9 +10,10 @@ export const useSavedCharacterSaves = (character, characterClass) => {
     const proficientAbilities =
       characterClass.value?.savingThrowProficiencies ?? []
 
-    const level = character.value?.level ?? 1
     const proficiencyBonus =
-      Math.floor((level - 1) / 4) + 2
+      getProficiencyBonus(
+        character.value?.level
+      )
 
     const abilities = [
       'strength',
@@ -21,7 +26,10 @@ export const useSavedCharacterSaves = (character, characterClass) => {
 
     return abilities.map(ability => {
       const score = abilityScores[ability] ?? 10
-      const modifier = Math.floor((score - 10) / 2)
+      const modifier =
+      getAbilityModifier(
+        score
+      )
       const isProficient = proficientAbilities.includes(ability)
 
       return {

@@ -3,17 +3,28 @@ import { ref, computed } from "vue";
 import { combatTargets } from "~/data/combatTargets";
 import { races } from "~/data/races";
 import {
+  useDice
+} from "~/composables/useDice";
+import {
+  getAbilityModifier
+} from '~/domain/character/statRules'
+import {
   createCharacterParticipant,
   getParticipantAttackProfile,
 } from "~/domain/combat/participantFactory";
 import {
   resolveRollMode,
+  resolveAttackOutcome,
   rollD20ByMode,
   rollWeaponDamage,
   getCoverACBonus,
 } from "~/domain/combat/attackEngine";
 
 export const useCombatStore = defineStore("combat", () => {
+  const {
+    rollD20
+  } = useDice()
+
   const getActionSurgeUses = (participant) => {
     if (participant.classId !== "fighter" && participant.classId !== "Воин") {
       return 0;
@@ -62,14 +73,16 @@ export const useCombatStore = defineStore("combat", () => {
     }
 
     if (participant?.dexterity != null) {
-      return Math.floor((Number(participant.dexterity) - 10) / 2);
+      return getAbilityModifier(
+        participant.dexterity
+      );
     }
 
     return 0;
   };
 
   const rollInitiative = (participant) => {
-    const roll = Math.floor(Math.random() * 20) + 1;
+  const roll = rollD20()
     const modifier = getInitiativeModifier(participant);
     participant.initiativeRoll = roll;
     participant.initiative = roll + modifier;
@@ -200,7 +213,7 @@ const clearCombatEvents = () => {
   const turnOrder = ref([]);
 
   // D&D 5e 2014: flanking is an optional DMG rule, not a core PHB rule.
-  const flankingEnabled = ref(false);
+  const flankingEnabled = ref(true);
   const roundNumber = ref(1);
 
   const targets = computed(() => {
@@ -1493,13 +1506,37 @@ const wakeParticipant = (
 
     const roll = rollD20ByMode(mode);
     const d20 = roll.roll;
-    const coverBonus = getCoverACBonus(attackContext.cover);
-    const baseTargetAC = getEffectiveArmorClass(targetId);
-    const targetAC = baseTargetAC + coverBonus;
-    const total = d20 + Number(attackProfile.attackModifier ?? 0);
-    const critical = d20 === 20;
-    const naturalOne = d20 === 1;
-    const hit = critical || (!naturalOne && total >= targetAC);
+
+    const coverBonus =
+      getCoverACBonus(
+        attackContext.cover
+      );
+
+    const baseTargetAC =
+      getEffectiveArmorClass(
+        targetId
+      );
+
+    const targetAC =
+      baseTargetAC + coverBonus;
+
+    const attackOutcome =
+      resolveAttackOutcome({
+        d20,
+        attackModifier:
+          attackProfile.attackModifier,
+        targetAC
+      });
+
+    const {
+      total,
+      critical,
+      criticalFail,
+      hit
+    } = attackOutcome;
+
+    const naturalOne =
+      criticalFail;
 
     let damage = null;
 

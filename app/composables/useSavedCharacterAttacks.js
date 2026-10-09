@@ -1,10 +1,11 @@
 import { computed } from 'vue'
-
 import { useDice } from '~/composables/useDice'
-
 import { useSavedCharacterEffects } from '~/composables/useSavedCharacterEffects'
-
 import { useAttackProgression } from '~/composables/useAttackProgression'
+import {
+  getAbilityModifier,
+  getProficiencyBonus
+} from '~/domain/character/statRules'
 
 
 export const useSavedCharacterAttacks = (
@@ -54,33 +55,21 @@ export const useSavedCharacterAttacks = (
 
     const level =
       character.value.level ?? 1
-
-    const proficiencyBonus =
-      Math.floor(
-        (level - 1) / 4
-      ) + 2
-
+    
     const abilityScores =
       character.value.abilityScores ?? {}
 
-    const getModifier = (
-      ability
-    ) => {
-      const score =
-        abilityScores[ability] ?? 10
-
-      return Math.floor(
-        (score - 10) / 2
-      )
-    }
+    const proficiencyBonus =
+      getProficiencyBonus(level)
 
     if (!weapon.value) {
       const ability =
         'strength'
 
-      const abilityModifier =
-        getModifier(ability)
-
+    const abilityModifier =
+      getAbilityModifier(
+        abilityScores[ability]
+      )
       return {
         weapon: {
           id: 'unarmed-strike',
@@ -154,7 +143,9 @@ export const useSavedCharacterAttacks = (
     }
 
     const abilityModifier =
-      getModifier(ability)
+      getAbilityModifier(
+        abilityScores[ability]
+      )
 
     const attackModifier =
       abilityModifier +
