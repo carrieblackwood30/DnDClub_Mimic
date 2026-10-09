@@ -1,15 +1,26 @@
 import { computed } from 'vue'
+
 import {
   getAbilityModifier
 } from '~/domain/character/statRules'
 
+import {
+  getCharacterArmorClass
+} from '~/domain/character/armorClassRules'
+
+
 export const useCharacterAC = () => {
-  const characterCreator = useCharacterCreatorStore()
+  const characterCreator =
+    useCharacterCreatorStore()
 
-  const armorsStore = useArmorsStore()
-  const shieldsStore = useShieldsStore()
+  const armorsStore =
+    useArmorsStore()
 
-  const { abilityScores } = useCharacterStats()
+  const shieldsStore =
+    useShieldsStore()
+
+  const { abilityScores } =
+    useCharacterStats()
 
   const armor = computed(() => {
     if (!characterCreator.armorId) {
@@ -18,7 +29,9 @@ export const useCharacterAC = () => {
 
     return (
       armorsStore.allArmors.find(
-        item => item.id === characterCreator.armorId
+        item =>
+          item.id ===
+          characterCreator.armorId
       ) ?? null
     )
   })
@@ -40,30 +53,28 @@ export const useCharacterAC = () => {
   })
 
   const armorClass = computed(() => {
-    let ac = 10 + dexterityModifier.value
+    return getCharacterArmorClass({
+      classId:
+        characterCreator.classId,
 
-    if (armor.value) {
-      ac = armor.value.baseAC
+      subclassId:
+        characterCreator.subclassId,
 
-      if (armor.value.dexBonus) {
-        let dexBonus = dexterityModifier.value
+      level:
+        characterCreator.level,
 
-        if (
-          armor.value.maxDexBonus !== null &&
-          dexBonus > armor.value.maxDexBonus
-        ) {
-          dexBonus = armor.value.maxDexBonus
-        }
+      abilityScores:
+        abilityScores.value,
 
-        ac += dexBonus
-      }
-    }
+      armor:
+        armor.value,
 
-    if (shield.value) {
-      ac += shield.value.armorBonus
-    }
+      shield:
+        shield.value,
 
-    return ac
+      classChoices:
+        characterCreator.classChoices ?? {}
+    })
   })
 
   const meetsStrengthRequirement = computed(() => {

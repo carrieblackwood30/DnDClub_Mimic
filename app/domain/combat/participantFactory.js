@@ -4,6 +4,9 @@ import { weapons } from '~/data/weapons'
 import { armors } from '~/data/armors'
 import { shields } from '~/data/shields'
 import { attackProgression } from '~/data/attackProgression'
+import {
+  getCharacterArmorClass
+} from '~/domain/character/armorClassRules'
 
 import {
   getAbilityModifier,
@@ -13,6 +16,10 @@ import {
 import {
   getMaxHitPoints as calculateMaxHitPoints
 } from '~/domain/character/hitPointsRules'
+
+import {
+  getCharacterSpeed
+} from '~/domain/character/classFeatureRules'
 
 const getRaceSpeed = character => {
   const race = races.find(item => item.id === character?.raceId)
@@ -62,37 +69,34 @@ const getMaxHitPoints = character => {
   return calculateMaxHitPoints({
     level: character?.level,
     hitDie: classData.hitDie,
+    hitPointRolls: character?.hitPointRolls ?? {},
     constitutionModifier
   })
 }
 
 const getArmorClass = character => {
-  const dexterityModifier = getAbilityModifier(
-    character?.abilityScores?.dexterity
-  )
-  const armor = getArmorData(character)
-  const shield = getShieldData(character)
+  return getCharacterArmorClass({
+    classId:
+      character?.classId,
 
-  let armorClass = 10 + dexterityModifier
+    subclassId:
+      character?.subclassId,
 
-  if (armor) {
-    armorClass = Number(armor.baseAC ?? 10)
+    level:
+      character?.level,
 
-    if (armor.dexBonus) {
-      const maxDexBonus = armor.maxDexBonus
-      const dexBonus = maxDexBonus == null
-        ? dexterityModifier
-        : Math.min(dexterityModifier, maxDexBonus)
+    abilityScores:
+      character?.abilityScores ?? {},
 
-      armorClass += dexBonus
-    }
-  }
+    armor:
+      getArmorData(character),
 
-  if (shield) {
-    armorClass += Number(shield.armorBonus ?? 0)
-  }
+    shield:
+      getShieldData(character),
 
-  return armorClass
+    classChoices:
+      character?.classChoices ?? {}
+  })
 }
 
 const getAttackCount = character => {
@@ -248,7 +252,13 @@ export const createCharacterParticipant = character => {
       )
     ),
     armorClass,
-    speed: getRaceSpeed(character),
+    speed: getCharacterSpeed({
+      baseSpeed: getRaceSpeed(character),
+      classId: character.classId,
+      level: character.level,
+      armor: getArmorData(character),
+      shield: getShieldData(character)
+    }),
     attackBonus: attackProfile.attackModifier,
     damageDice: attackProfile.weapon.id === 'unarmed-strike'
       ? '1'

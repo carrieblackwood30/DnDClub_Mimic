@@ -1,6 +1,8 @@
 import { defineStore } from "pinia";
 import { ref, reactive } from "vue";
-import { getExperienceForLevel } from "~/domain/character/levelProgression";
+import {
+  getExperienceRequiredForLevel
+} from '~/domain/character/levelUpRules'
 
 export const useCharacterCreatorStore = defineStore("characterCreator", () => {
   const name = ref("");
@@ -20,6 +22,7 @@ export const useCharacterCreatorStore = defineStore("characterCreator", () => {
   const knownSpellIds = ref([]);
   const spellSlots = ref([]);
   const knownCantripIds = ref([]);
+  const classChoices = ref({})
 
   const abilityScores = reactive({
     strength: 10,
@@ -33,6 +36,17 @@ export const useCharacterCreatorStore = defineStore("characterCreator", () => {
   const setAbilityScore = (ability, value) => {
     abilityScores[ability] = value;
   };
+
+  const setClassChoice = (key, value) => {
+  classChoices.value = {
+    ...classChoices.value,
+    [key]: value
+  }
+}
+
+const resetClassChoices = () => {
+  classChoices.value = {}
+}
 
   const setLevel = (value) => {
     level.value = value;
@@ -157,7 +171,10 @@ export const useCharacterCreatorStore = defineStore("characterCreator", () => {
     return {
       name: name.value,
       level: level.value,
-      experiencePoints: 0,
+      experiencePoints:
+      getExperienceRequiredForLevel(
+        level.value
+      ),
 
       raceId: raceId.value,
 
@@ -202,6 +219,10 @@ export const useCharacterCreatorStore = defineStore("characterCreator", () => {
       feats: [],
 
       levelHistory: [],
+
+      classChoices: {
+        ...classChoices.value
+      },
     };
   };
 
@@ -228,6 +249,7 @@ export const useCharacterCreatorStore = defineStore("characterCreator", () => {
     setArmor,
     setShield,
     setWeapon,
+    resetClassChoices,
     setWeaponAbility,
     toggleSkill,
     canLearnCantrip,
@@ -243,6 +265,8 @@ export const useCharacterCreatorStore = defineStore("characterCreator", () => {
     setSpellSlots,
     createCharacter,
     knownSpellIds,
+    classChoices,
+    setClassChoice,
     learnKnownSpell,
     forgetKnownSpell,
     knowsSpell,
