@@ -1,3 +1,4 @@
+
 <script setup>
 const characterCreator = useCharacterCreatorStore()
 const racesStore = useRacesStore()
@@ -9,6 +10,8 @@ const {
 } = useCharacterRace()
 
 const selectRace = (raceId) => {
+  if (characterCreator.raceId === raceId) return
+
   characterCreator.raceId = raceId
   characterCreator.subraceId = null
 }
@@ -20,16 +23,16 @@ const selectSubrace = (subraceId) => {
 
 <template>
   <div>
-    <h2 class="text-2xl font-bold mb-4">
+    <h2 class="mb-4 text-2xl font-bold">
       Выберите расу
     </h2>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
       <button
         v-for="item in racesStore.allRaces"
         :key="item.id"
         type="button"
-        class="border rounded-lg p-4 text-left hover:bg-gray-100"
+        class="rounded-lg border p-4 text-left transition hover:bg-gray-100"
         :class="{
           'border-black bg-gray-100':
             characterCreator.raceId === item.id
@@ -46,16 +49,22 @@ const selectSubrace = (subraceId) => {
       v-if="race && subraces.length"
       class="mt-8"
     >
-      <h2 class="text-2xl font-bold mb-4">
-        Выберите подрасу
+      <h2 class="mb-4 text-2xl font-bold">
+        {{
+          race.id === 'dragonborn'
+            ? 'Выберите драконье наследие'
+            : race.id === 'tiefling'
+              ? 'Выберите инфернальное наследие'
+              : 'Выберите подрасу'
+        }}
       </h2>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <button
           v-for="item in subraces"
           :key="item.id"
           type="button"
-          class="border rounded-lg p-4 text-left hover:bg-gray-100"
+          class="rounded-lg border p-4 text-left transition hover:bg-gray-100"
           :class="{
             'border-black bg-gray-100':
               characterCreator.subraceId === item.id
@@ -79,7 +88,13 @@ const selectSubrace = (subraceId) => {
       </p>
 
       <p v-if="subrace">
-        Выбрана подраса:
+        {{
+          race.id === 'dragonborn'
+            ? 'Выбрано драконье наследие:'
+            : race.id === 'tiefling'
+              ? 'Выбрано инфернальное наследие:'
+              : 'Выбрана подраса:'
+        }}
         <strong>{{ subrace.name }}</strong>
       </p>
     </div>

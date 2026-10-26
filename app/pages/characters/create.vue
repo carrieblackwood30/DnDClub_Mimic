@@ -52,6 +52,10 @@ const createCharacter = () => {
   charactersStore.addCharacter(character)
 
   console.log('Создан персонаж:', character)
+
+  navigateTo(
+    `/characters/`
+  )
 }
 
 const levelsRoman = [

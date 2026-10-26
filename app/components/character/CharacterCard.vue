@@ -1,4 +1,6 @@
 <script setup>
+import { nextTick, ref } from 'vue'
+
 const props = defineProps({
   character: {
     type: Object,
@@ -12,8 +14,39 @@ const {
   race,
   subrace,
   characterClass,
-  subclass
+  subclass,
+  armorClass
 } = useSavedCharacter(character)
+
+const pdfSheet = ref(null)
+const pdfReady = ref(false)
+const pdfDownloading = ref(false)
+const pdfError = ref('')
+
+const downloadCharacterPdf = async () => {
+  if (pdfDownloading.value) return
+
+  pdfDownloading.value = true
+  pdfError.value = ''
+  pdfReady.value = true
+
+  try {
+    await nextTick()
+
+    if (!pdfSheet.value?.download) {
+      throw new Error('Шаблон PDF не готов')
+    }
+
+    await pdfSheet.value.download()
+  } catch (error) {
+    console.error('Ошибка создания PDF персонажа:', error)
+    pdfError.value = 'Не удалось создать PDF. Попробуй ещё раз.'
+  } finally {
+    pdfReady.value = false
+    pdfDownloading.value = false
+  }
+}
+
 </script>
 
 <template>
@@ -62,6 +95,12 @@ const {
 
             <span v-if="subrace">
               — {{ subrace.name }}
+            </span>
+          </p>
+          <p class="mt-2 text-sm text-[#b69a70]">
+            Класс защиты:
+            <span class="font-black text-[#d8b66f]">
+              {{ armorClass }}
             </span>
           </p>
         </div>
@@ -272,7 +311,7 @@ const {
 
       <!-- Действия -->
       <div
-        class="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2"
+        class="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-3"
       >
         <!-- Открыть персонажа -->
         <NuxtLink
@@ -315,7 +354,33 @@ const {
             →
           </span>
         </NuxtLink>
+
+        <button
+          type="button"
+          :disabled="pdfDownloading"
+          class="group flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[#52664a] bg-[linear-gradient(180deg,#263a2c,#14231a)] px-3 text-sm font-black text-[#c4dbad] transition hover:-translate-y-0.5 hover:border-[#829b68] hover:brightness-110 disabled:cursor-wait disabled:opacity-60"
+          @click="downloadCharacterPdf"
+        >
+          <span class="text-lg">
+            {{ pdfDownloading ? '…' : '↓' }}
+          </span>
+
+          <span>
+            {{ pdfDownloading ? 'Готовим PDF…' : 'Скачать PDF' }}
+          </span>
+        </button>
       </div>
+      <p
+        v-if="pdfError"
+        class="mt-2 text-xs text-red-400"
+      >
+        {{ pdfError }}
+      </p>
     </div>
+    <CharacterPdfSheet
+      v-if="pdfReady"
+      ref="pdfSheet"
+      :character="character"
+    />
   </article>
 </template>

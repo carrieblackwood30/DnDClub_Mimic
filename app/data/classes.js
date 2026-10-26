@@ -121,7 +121,7 @@ export const classes = [
 
   {
     id: 'cleric',
-    name: 'Клирик',
+    name: 'Жрец',
 
     hitDie: 8,
 
